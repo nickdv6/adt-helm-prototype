@@ -15,7 +15,7 @@ export default function Shipping({ searchParams }: { searchParams: { tab?: strin
 
   const readyToShip = db.prepare(`
     SELECT o.id, o.order_number, c.name as company_name, o.subtotal, o.adt_promised_date,
-           o.is_rush, o.is_blind_ship, o.is_third_party_billed,
+           o.is_rush, o.is_blind_ship, c.is_third_party_billed,
            c.carrier_account_carrier, c.carrier_account_number
     FROM orders o JOIN companies c ON o.company_id = c.id
     WHERE o.status = 'Ready to Ship'
@@ -24,7 +24,7 @@ export default function Shipping({ searchParams }: { searchParams: { tab?: strin
 
   const recentShipped = db.prepare(`
     SELECT o.id, o.order_number, c.name as company_name, o.subtotal, o.adt_promised_date,
-           o.is_third_party_billed, c.carrier_account_carrier, c.carrier_account_number
+           c.is_third_party_billed, c.carrier_account_carrier, c.carrier_account_number
     FROM orders o JOIN companies c ON o.company_id = c.id
     WHERE o.status IN ('Shipped','Invoiced')
     ORDER BY o.id DESC LIMIT 20
