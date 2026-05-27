@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #fafafa;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+}
+
+html, body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+* { box-sizing: border-box; }
+
+.status-pill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.status-pill[data-status="Draft"] { background: #F2F2F2; color: #6b7280; }
+.status-pill[data-status="Submitted"], .status-pill[data-status="Validated"] { background: #D9E2F3; color: #1F3864; }
+.status-pill[data-status="Waiting on Approval"], .status-pill[data-status="Waiting on Customer"], .status-pill[data-status="Waiting on Artwork"] { background: #FCE4A6; color: #6C3F00; }
+.status-pill[data-status="In Production"], .status-pill[data-status="Partially Complete"], .status-pill[data-status="Printing"], .status-pill[data-status="Pending Internal Proof"] { background: #FFF2CC; color: #6C3F00; }
+.status-pill[data-status="Ready to Ship"], .status-pill[data-status="Ready for Scheduling"], .status-pill[data-status="Ready for Print"] { background: #D9E2F3; color: #1F3864; }
+.status-pill[data-status="Shipped"], .status-pill[data-status="Invoiced"], .status-pill[data-status="Closed"], .status-pill[data-status="Complete"], .status-pill[data-status="Printed"] { background: #E2EFDA; color: #1E8449; }
+.status-pill[data-status="On Hold"] { background: #F8CBAD; color: #7A1F0F; }
+.status-pill[data-status="Cancelled"] { background: #F2F2F2; color: #6b7280; }
+
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  margin-right: 4px;
+}
