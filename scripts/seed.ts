@@ -341,7 +341,7 @@ for (let i = 0; i < totalOrders; i++) {
     source,
     userByRole['csr'],
     subtotal,
-    co.is_third_party_billed,
+    co.is_third_party_billed ?? 0,
     isRush,
     approvalReq,
     triggers.length > 0 ? triggers.join(' + ') : null,
