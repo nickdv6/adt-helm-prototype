@@ -87,7 +87,6 @@ for (let i = 0; i < 7; i++) {
   insCo.run(
     faker.company.name(),
     faker.helpers.arrayElement(['Home Goods', 'Interior Design', 'Hospitality', 'Retail']),
-    'Customer',
     'NET 30',
     0,
     null,
