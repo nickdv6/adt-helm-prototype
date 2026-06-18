@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Home, FileText, Layers, Truck, Package, Palette, Printer, Scissors, Settings, Users, Inbox, AlertTriangle, Boxes, Flame } from 'lucide-react';
+import { Home, FileText, Layers, Truck, Package, Palette, Printer, Scissors, Settings, Users, Inbox, AlertTriangle, Boxes, Flame, Sliders } from 'lucide-react';
 
 export function Sidebar() {
   return (
@@ -34,6 +34,7 @@ export function Sidebar() {
 
         <Section label="Admin" />
         <NavItem href="/customers" icon={<Users className="w-4 h-4" />} label="Customers" />
+        <NavItem href="/customer-configs" icon={<Sliders className="w-4 h-4" />} label="Customer Configs" />
         <NavItem href="/packaging-profiles" icon={<Layers className="w-4 h-4" />} label="Packaging Profiles" />
         <NavItem href="/intake" icon={<FileText className="w-4 h-4" />} label="CSV/XML Intake" />
         <NavItem href="/settings" icon={<Settings className="w-4 h-4" />} label="Settings" />
