@@ -1,766 +1,756 @@
-import Link from 'next/link';
-import { Card, CardHeader, Tag } from '@/components/ui';
+'use client';
 
-// /customer-configs — Customer Configuration deep-detail view
-// Per Wave 1 Core Scope C2 (broadened Customer Profile): the single place ADT configures
-// EVERYTHING specific to how a given customer's work is intaken, produced, packaged, shipped,
-// and billed. Per Nick: this page exists so reviewers can see how Helm understands the
-// CSV/XML intake setup + the routing guide + the SKU mapping per customer — not just the
-// thin listing shown at /intake.
-//
-// One detailed config per Wave 1 CSV/XML customer (St. Frank, Inside/Havenly, Laura Park,
-// House of MBR, Lemieux Et Cie). Tab selector at top, deep detail below.
+import { useState } from 'react';
+import { Plus, Trash2, Upload, FileCheck, FolderInput, FolderOutput, Archive, KeyRound } from 'lucide-react';
+import { Card, CardHeader, Tag, Button } from '@/components/ui';
 
-type FieldMap = { customer_col: string; helm_field: string; notes?: string };
-type SKUMap = { customer_sku: string; adt_sku: string; design: string; colorway: string; fabric: string };
-type RecentImport = { date: string; rows: number; pr_created: number; failed: number };
-type LabelMode = 'A' | 'B' | 'C';
+// /customer-configs — Admin tool to set up a new CSV/XML customer's intake pipeline.
+// Per Nick: this is the configuration surface. Admin defines source folders, field mappings,
+// destination folders for shipping export (so FedEx/UPS systems can pick up and print labels),
+// packing list archive paths, hot folder routing for production, and the production/billing
+// rules that flow downstream.
 
-type CustomerConfig = {
-  name: string;
+// Existing presets shown as tabs so admin can edit an active customer; rightmost tab is
+// '+ Add New Customer Config' for a fresh setup. Form is fully editable.
+
+// =====================================================================
+// Mock existing customer presets — populate the form when admin selects a tab.
+// =====================================================================
+
+type Preset = {
   slug: string;
-  tags: string[];
-  intake: {
-    source: string;
-    method: string;
-    schedule: string;
-    file_format: string;
-    file_naming: string;
-    auto_route: boolean;
-    recent_imports: RecentImport[];
-    field_mapping: FieldMap[];
-    sample_row: Record<string, string>;
-    sample_output: { pr_number: string; sku: string; fabric: string; design: string; qty: number; unit: string }[];
-  };
-  routing_guide: {
-    nas_root: string;
-    folder_convention: string;
-    strike_off_rule: string;
-    strike_off_approval: string;
-    hot_folder_destination: string;
-  };
-  sku_mapping: SKUMap[];
-  fulfillment: {
-    method: string;
-    label_mode?: LabelMode;
-    label_mode_note?: string;
-  };
-  packaging: { product_type: string; profile: string; notes?: string }[];
-  shipping: {
-    preferred_carrier: string;
-    service_level: string;
-    blind_ship_default: boolean;
-    third_party_billed: boolean;
-    carrier_account?: { carrier: string; masked_account: string };
-  };
-  billing: {
-    credit_hold: boolean;
-    payment_terms: string;
-    overage_policy: string;
-    overage_tolerance_pct: number;
-    pricing_variance_threshold: string;
-    po_required: boolean;
-    invoice_routing: string;
-  };
-  production_requirements: { kind: string; value: string }[];
-  credentials: { kind: string; value: string }[];
+  display_name: string;
+  status: 'Active' | 'Draft' | 'Inactive';
+  customer_id_label: string;
 };
 
-// =====================================================================
-// Mock data: 5 Wave 1 CSV/XML customers per C10
-// =====================================================================
-
-const CONFIGS: CustomerConfig[] = [
-  // --------------- ST. FRANK ---------------
-  {
-    name: 'St. Frank',
-    slug: 'stfrank',
-    tags: ['CSV intake', 'SFTP drop', 'Direct-to-customer fulfillment'],
-    intake: {
-      source: 'CSV file feed (customer-pushed)',
-      method: 'SFTP drop — St. Frank pushes to ADT SFTP path',
-      schedule: 'Watcher polls every 15 min (07:00–19:00 PT, M-F)',
-      file_format: 'CSV (UTF-8, comma-delimited, header row)',
-      file_naming: 'stfrank_po_YYYYMMDD_HHMM.csv',
-      auto_route: true,
-      recent_imports: [
-        { date: '2026-06-18 08:15 PT', rows: 14, pr_created: 14, failed: 0 },
-        { date: '2026-06-17 16:30 PT', rows: 9, pr_created: 9, failed: 0 },
-        { date: '2026-06-17 08:15 PT', rows: 22, pr_created: 21, failed: 1 },
-        { date: '2026-06-16 14:45 PT', rows: 6, pr_created: 6, failed: 0 },
-        { date: '2026-06-16 08:15 PT', rows: 11, pr_created: 11, failed: 0 },
-      ],
-      field_mapping: [
-        { customer_col: 'po_number',           helm_field: 'Order.po_number' },
-        { customer_col: 'customer_sku',        helm_field: 'PR.sku_id (via SKU mapping)' },
-        { customer_col: 'design_code',         helm_field: 'PR.design_id (lookup)' },
-        { customer_col: 'colorway_code',       helm_field: 'PR.colorway_id (lookup)' },
-        { customer_col: 'qty_yards',           helm_field: 'PR.planned_yardage' },
-        { customer_col: 'requested_ship_date', helm_field: 'Order.customer_requested_date' },
-        { customer_col: 'ship_to_name',        helm_field: 'ShipToAddress.name' },
-        { customer_col: 'ship_to_addr_1',      helm_field: 'ShipToAddress.line1' },
-        { customer_col: 'ship_to_addr_2',      helm_field: 'ShipToAddress.line2' },
-        { customer_col: 'ship_to_city',        helm_field: 'ShipToAddress.city' },
-        { customer_col: 'ship_to_state',       helm_field: 'ShipToAddress.state' },
-        { customer_col: 'ship_to_zip',         helm_field: 'ShipToAddress.zip' },
-        { customer_col: 'notes',               helm_field: 'Order.notes (free-text)', notes: 'Carried through but not used for routing' },
-      ],
-      sample_row: {
-        po_number: 'SF-44291',
-        customer_sku: 'SF-CYP-Y15',
-        design_code: 'CYP',
-        colorway_code: 'IND',
-        qty_yards: '15',
-        requested_ship_date: '2026-06-26',
-        ship_to_name: 'St. Frank Distribution',
-        ship_to_addr_1: '440 Brannan St',
-        ship_to_city: 'San Francisco',
-        ship_to_state: 'CA',
-        ship_to_zip: '94107',
-        notes: 'Standard',
-      },
-      sample_output: [
-        { pr_number: 'PR-12091', sku: 'CYP-IND-Yardage', fabric: 'Cotton Sateen 110-thread', design: 'Cypress / Indigo', qty: 15, unit: 'yards' },
-      ],
-    },
-    routing_guide: {
-      nas_root: '\\\\adt-nas\\artwork\\stfrank',
-      folder_convention: '{design_code}/{colorway_code}/_production-ready/*.tif',
-      strike_off_rule: 'First-run only — strike-off required only when this Design+Colorway+Fabric has never been produced before',
-      strike_off_approval: 'Internal only (Jeannine reviews; no customer email approval)',
-      hot_folder_destination: 'Route to MS JP4 hot folder (Cotton Sateen jobs)',
-    },
-    sku_mapping: [
-      { customer_sku: 'SF-CYP-Y15', adt_sku: 'CYP-IND-Yardage',  design: 'Cypress',  colorway: 'Indigo',  fabric: 'Cotton Sateen 110-thread' },
-      { customer_sku: 'SF-CYP-Y30', adt_sku: 'CYP-IND-Yardage',  design: 'Cypress',  colorway: 'Indigo',  fabric: 'Cotton Sateen 110-thread' },
-      { customer_sku: 'SF-MAR-Y15', adt_sku: 'MAR-WHT-Yardage',  design: 'Marigold', colorway: 'White',   fabric: 'Linen Blend Natural' },
-      { customer_sku: 'SF-MAR-Y30', adt_sku: 'MAR-WHT-Yardage',  design: 'Marigold', colorway: 'White',   fabric: 'Linen Blend Natural' },
-      { customer_sku: 'SF-COR-Y15', adt_sku: 'COR-PINK-Yardage', design: 'Coral',    colorway: 'Pink',    fabric: 'Cotton Sateen 90-thread' },
-    ],
-    fulfillment: {
-      method: 'Direct-to-customer (production order ships to customer warehouse, no stored inventory)',
-    },
-    packaging: [
-      { product_type: 'Yardage roll', profile: 'St. Frank Standard Roll Pack', notes: 'Kraft paper wrap + ADT roll-end label' },
-    ],
-    shipping: {
-      preferred_carrier: 'UPS',
-      service_level: 'Ground',
-      blind_ship_default: false,
-      third_party_billed: false,
-    },
-    billing: {
-      credit_hold: false,
-      payment_terms: 'Net 30',
-      overage_policy: 'Accepted up to tolerance',
-      overage_tolerance_pct: 5,
-      pricing_variance_threshold: 'Admin-configured · alerts Megan on variance over threshold',
-      po_required: true,
-      invoice_routing: 'ap@stfrank.example (auto on Shipped)',
-    },
-    production_requirements: [
-      { kind: 'Fabric restrictions', value: 'Cotton Sateen 110-thread preferred; Linen Blend Natural acceptable' },
-      { kind: 'Inspection threshold', value: 'Standard (Pass / Pass with Notes / Fail)' },
-      { kind: 'Finishing', value: 'None (yardage only)' },
-    ],
-    credentials: [
-      { kind: 'SFTP', value: 'sftp.adt.example · user=stfrank_push · key=★★★★★★★★ (rotated 2026-04-12)' },
-    ],
-  },
-
-  // --------------- INSIDE / HAVENLY ---------------
-  {
-    name: 'Inside / Havenly',
-    slug: 'inside-havenly',
-    tags: ['Shopify intake', 'Stored inventory', 'Label mode A', 'Blind ship'],
-    intake: {
-      source: 'Shopify packing-list email (customer forwards from Shopify)',
-      method: 'Helm parses inbound email to fulfillment@adt.example',
-      schedule: 'Real-time (on email receipt)',
-      file_format: 'HTML email body (Helm extracts order # + line items)',
-      file_naming: 'N/A (email-driven, not file-driven)',
-      auto_route: true,
-      recent_imports: [
-        { date: '2026-06-18 09:42 PT', rows: 1, pr_created: 0, failed: 0 },
-        { date: '2026-06-18 09:14 PT', rows: 1, pr_created: 0, failed: 0 },
-        { date: '2026-06-18 08:51 PT', rows: 2, pr_created: 0, failed: 0 },
-        { date: '2026-06-17 19:08 PT', rows: 1, pr_created: 0, failed: 0 },
-        { date: '2026-06-17 17:33 PT', rows: 1, pr_created: 0, failed: 0 },
-      ],
-      field_mapping: [
-        { customer_col: 'shopify_order_id',  helm_field: 'FulfillmentRequest.source_id', notes: 'C22 entity, not a Production Order' },
-        { customer_col: 'shopify_sku',       helm_field: 'FR.line.sku (via SKU mapping)' },
-        { customer_col: 'qty',               helm_field: 'FR.line.qty' },
-        { customer_col: 'recipient_name',    helm_field: 'FR.end_recipient.name' },
-        { customer_col: 'recipient_addr',    helm_field: 'FR.end_recipient.address' },
-        { customer_col: 'shipping_method',   helm_field: 'FR.shipping_method (mapped)' },
-      ],
-      sample_row: {
-        shopify_order_id: '#INS-44291',
-        shopify_sku: 'CYP-IND-PLW-18',
-        qty: '2',
-        recipient_name: 'Emily Park',
-        recipient_addr: '742 Maplewood Dr, Columbus, OH 43215',
-        shipping_method: 'Standard',
-      },
-      sample_output: [
-        { pr_number: 'FR-3142', sku: 'PLW-CYP-18x18', fabric: 'Cotton Sateen 110-thread', design: 'Cypress / Indigo', qty: 2, unit: 'pillows' },
-      ],
-    },
-    routing_guide: {
-      nas_root: '\\\\adt-nas\\artwork\\inside',
-      folder_convention: '{design}/{colorway}/production/*.tif',
-      strike_off_rule: 'Never — Inside-tier customers; production is from pre-approved combos in stored inventory',
-      strike_off_approval: 'N/A',
-      hot_folder_destination: 'N/A — pulled from stored inventory; no new PR routing',
-    },
-    sku_mapping: [
-      { customer_sku: 'CYP-IND-PLW-18', adt_sku: 'PLW-CYP-18x18',  design: 'Cypress',  colorway: 'Indigo',  fabric: 'Cotton Sateen 110-thread' },
-      { customer_sku: 'CYP-IND-PLW-20', adt_sku: 'PLW-CYP-20x20',  design: 'Cypress',  colorway: 'Indigo',  fabric: 'Cotton Sateen 110-thread' },
-      { customer_sku: 'MAR-WHT-PLW-14', adt_sku: 'PLW-MAR-14x14',  design: 'Marigold', colorway: 'White',   fabric: 'Linen Blend Natural' },
-      { customer_sku: 'SAG-OLV-PLW-14', adt_sku: 'PLW-SAG-14x14',  design: 'Sage',     colorway: 'Olive',   fabric: 'Linen Blend Natural' },
-    ],
-    fulfillment: {
-      method: 'Customer-stored inventory — pull on Fulfillment Request',
-      label_mode: 'A',
-      label_mode_note: 'ADT logs into Inside\'s Shopify with stored credentials and prints the label from there.',
-    },
-    packaging: [
-      { product_type: 'Throw Pillow', profile: 'Inside Pillow Tissue Wrap', notes: 'Tissue + branded sticker · no insert paperwork (Inside ships their own welcome card later)' },
-    ],
-    shipping: {
-      preferred_carrier: 'UPS',
-      service_level: 'Ground',
-      blind_ship_default: true,
-      third_party_billed: false,
-    },
-    billing: {
-      credit_hold: false,
-      payment_terms: 'Net 60 (volume customer)',
-      overage_policy: 'N/A (stored-inventory model — no overage)',
-      overage_tolerance_pct: 0,
-      pricing_variance_threshold: 'Admin-configured · alerts Megan on variance over threshold',
-      po_required: false,
-      invoice_routing: 'Monthly summary invoice to ap@inside.example',
-    },
-    production_requirements: [
-      { kind: 'Fabric restrictions', value: 'Cotton Sateen 110-thread for Cypress combos; Linen Blend Natural for Marigold/Sage combos' },
-      { kind: 'Inspection threshold', value: 'Standard for pillow construction; reject any visible color shift >ΔE 2.0' },
-      { kind: 'Finishing', value: 'Inserts fitted at ADT (Down Alternative standard)' },
-    ],
-    credentials: [
-      { kind: 'Shopify',          value: 'inside-havenly.myshopify.com · API token ★★★★★★★★ (rotated 2026-05-03)' },
-      { kind: 'Fulfillment email', value: 'fulfillment@adt.example listens for sender contains "inside.example"' },
-    ],
-  },
-
-  // --------------- LAURA PARK DESIGNS ---------------
-  {
-    name: 'Laura Park Designs',
-    slug: 'laura-park',
-    tags: ['CSV intake', 'Email attachment', 'Stored inventory', 'Label mode A'],
-    intake: {
-      source: 'CSV file (customer-emailed)',
-      method: 'Customer emails CSV attachment to orders@adt.example; Helm watcher polls inbox every 30 min',
-      schedule: 'Polled every 30 min',
-      file_format: 'CSV (UTF-8, comma-delimited, header row)',
-      file_naming: 'lpd_fulfillment_YYYYMMDD.csv',
-      auto_route: true,
-      recent_imports: [
-        { date: '2026-06-18 09:00 PT', rows: 6, pr_created: 0, failed: 0 },
-        { date: '2026-06-17 11:30 PT', rows: 11, pr_created: 0, failed: 1 },
-        { date: '2026-06-16 09:00 PT', rows: 8, pr_created: 0, failed: 0 },
-      ],
-      field_mapping: [
-        { customer_col: 'lpd_order_ref',     helm_field: 'FulfillmentRequest.source_id' },
-        { customer_col: 'sku',               helm_field: 'FR.line.sku (via SKU mapping)' },
-        { customer_col: 'qty',               helm_field: 'FR.line.qty' },
-        { customer_col: 'recipient_name',    helm_field: 'FR.end_recipient.name' },
-        { customer_col: 'recipient_address', helm_field: 'FR.end_recipient.address' },
-      ],
-      sample_row: {
-        lpd_order_ref: 'LPD-9942',
-        sku: 'MAR-Y-22',
-        qty: '3',
-        recipient_name: 'Sarah Chen',
-        recipient_address: '210 Bouldin Ave, Austin, TX 78704',
-      },
-      sample_output: [
-        { pr_number: 'FR-3138', sku: 'PLW-MAR-22x22', fabric: 'Cotton Sateen 110-thread', design: 'Marigold / Yellow', qty: 3, unit: 'pillows' },
-      ],
-    },
-    routing_guide: {
-      nas_root: '\\\\adt-nas\\artwork\\laura-park',
-      folder_convention: '{design}/{colorway}/production/*.tif',
-      strike_off_rule: 'Never — pre-approved combos in stored inventory',
-      strike_off_approval: 'N/A',
-      hot_folder_destination: 'N/A — pulled from stored inventory',
-    },
-    sku_mapping: [
-      { customer_sku: 'MAR-Y-22', adt_sku: 'PLW-MAR-22x22', design: 'Marigold', colorway: 'Yellow', fabric: 'Cotton Sateen 110-thread' },
-      { customer_sku: 'MAR-Y-18', adt_sku: 'PLW-MAR-18x18', design: 'Marigold', colorway: 'Yellow', fabric: 'Cotton Sateen 110-thread' },
-      { customer_sku: 'COR-P-18', adt_sku: 'PLW-COR-18x18', design: 'Coral',    colorway: 'Pink',   fabric: 'Cotton Sateen 90-thread' },
-    ],
-    fulfillment: {
-      method: 'Customer-stored inventory — pull on Fulfillment Request',
-      label_mode: 'A',
-      label_mode_note: 'ADT logs into Laura Park\'s Shopify with stored credentials and prints the label from there.',
-    },
-    packaging: [
-      { product_type: 'Throw Pillow', profile: 'Laura Park Tissue Wrap', notes: 'Tissue + LPD branded sticker' },
-    ],
-    shipping: {
-      preferred_carrier: 'USPS',
-      service_level: 'Priority',
-      blind_ship_default: true,
-      third_party_billed: false,
-    },
-    billing: {
-      credit_hold: false,
-      payment_terms: 'Net 30',
-      overage_policy: 'N/A (stored model)',
-      overage_tolerance_pct: 0,
-      pricing_variance_threshold: 'Admin-configured',
-      po_required: false,
-      invoice_routing: 'Monthly summary to ap@laurapark.example',
-    },
-    production_requirements: [
-      { kind: 'Fabric restrictions', value: 'Cotton Sateen variants only' },
-      { kind: 'Inspection threshold', value: 'Standard' },
-    ],
-    credentials: [
-      { kind: 'Shopify', value: 'laura-park.myshopify.com · API token ★★★★★★★★ (rotated 2026-04-22)' },
-      { kind: 'Orders email watcher', value: 'orders@adt.example listens for sender contains "laurapark.example" + attachment .csv' },
-    ],
-  },
-
-  // --------------- HOUSE OF MBR ---------------
-  {
-    name: 'House of MBR',
-    slug: 'house-of-mbr',
-    tags: ['CSV intake', 'Email attachment', 'Stored inventory', 'Label mode C'],
-    intake: {
-      source: 'CSV file (customer-emailed)',
-      method: 'Customer emails CSV attachment to orders@adt.example; watcher polls inbox',
-      schedule: 'Polled every 30 min',
-      file_format: 'CSV (UTF-8, comma-delimited, header row)',
-      file_naming: 'mbr_fulfill_YYYYMMDD.csv',
-      auto_route: true,
-      recent_imports: [
-        { date: '2026-06-18 08:45 PT', rows: 3, pr_created: 0, failed: 0 },
-        { date: '2026-06-17 13:20 PT', rows: 5, pr_created: 0, failed: 0 },
-      ],
-      field_mapping: [
-        { customer_col: 'mbr_ref',           helm_field: 'FulfillmentRequest.source_id' },
-        { customer_col: 'sku',               helm_field: 'FR.line.sku (via SKU mapping)' },
-        { customer_col: 'qty',               helm_field: 'FR.line.qty' },
-        { customer_col: 'recipient_name',    helm_field: 'FR.end_recipient.name' },
-        { customer_col: 'recipient_addr',    helm_field: 'FR.end_recipient.address' },
-        { customer_col: 'attached_label',    helm_field: 'FR.label_artifact (customer-supplied PDF)' },
-      ],
-      sample_row: {
-        mbr_ref: 'MBR-2091',
-        sku: 'LIN-NAT-84',
-        qty: '1',
-        recipient_name: 'David Kim',
-        recipient_addr: '1330 8th Ave, Seattle, WA 98119',
-        attached_label: 'mbr-2091-label.pdf',
-      },
-      sample_output: [
-        { pr_number: 'FR-3141', sku: 'DRP-LIN-84', fabric: 'Linen Blend Natural', design: 'Linen / Natural', qty: 1, unit: 'drape' },
-      ],
-    },
-    routing_guide: {
-      nas_root: '\\\\adt-nas\\artwork\\mbr',
-      folder_convention: '{sku}/production/*.tif',
-      strike_off_rule: 'Never — pre-approved combos',
-      strike_off_approval: 'N/A',
-      hot_folder_destination: 'N/A — pulled from stored inventory',
-    },
-    sku_mapping: [
-      { customer_sku: 'LIN-NAT-84', adt_sku: 'DRP-LIN-84', design: 'Linen',   colorway: 'Natural', fabric: 'Linen Blend Natural' },
-      { customer_sku: 'LIN-NAT-96', adt_sku: 'DRP-LIN-96', design: 'Linen',   colorway: 'Natural', fabric: 'Linen Blend Natural' },
-    ],
-    fulfillment: {
-      method: 'Customer-stored inventory — pull on Fulfillment Request',
-      label_mode: 'C',
-      label_mode_note: 'Customer supplies pre-paid carrier label as PDF attachment on the same email. Helm matches it to the FR by mbr_ref.',
-    },
-    packaging: [
-      { product_type: 'Drape', profile: 'MBR Drape Roll Pack', notes: 'Garment bag + branded ribbon' },
-    ],
-    shipping: {
-      preferred_carrier: 'Customer-supplied label',
-      service_level: 'Per label',
-      blind_ship_default: true,
-      third_party_billed: false,
-    },
-    billing: {
-      credit_hold: false,
-      payment_terms: 'Net 30',
-      overage_policy: 'N/A (stored model)',
-      overage_tolerance_pct: 0,
-      pricing_variance_threshold: 'Admin-configured',
-      po_required: false,
-      invoice_routing: 'Per-shipment invoice to ap@hofmbr.example',
-    },
-    production_requirements: [
-      { kind: 'Fabric restrictions', value: 'Linen Blend Natural only (per current contract)' },
-      { kind: 'Inspection threshold', value: 'Standard + drape-length check (±0.5") at packing' },
-    ],
-    credentials: [
-      { kind: 'Orders email watcher', value: 'orders@adt.example listens for sender contains "hofmbr.example" + attachment .csv + .pdf' },
-    ],
-  },
-
-  // --------------- LEMIEUX ET CIE ---------------
-  {
-    name: 'Lemieux Et Cie',
-    slug: 'lemieux',
-    tags: ['CSV intake', 'Email attachment', 'Stored inventory', 'Label mode A', 'Strike-off always required'],
-    intake: {
-      source: 'CSV file (customer-emailed)',
-      method: 'Customer emails CSV attachment to orders@adt.example; watcher polls inbox',
-      schedule: 'Polled every 30 min',
-      file_format: 'CSV (UTF-8, comma-delimited, header row)',
-      file_naming: 'lemieux_orders_YYYYMMDD.csv',
-      auto_route: true,
-      recent_imports: [
-        { date: '2026-06-18 07:30 PT', rows: 2, pr_created: 0, failed: 0 },
-        { date: '2026-06-17 16:00 PT', rows: 4, pr_created: 0, failed: 1 },
-      ],
-      field_mapping: [
-        { customer_col: 'lec_ref',         helm_field: 'FulfillmentRequest.source_id' },
-        { customer_col: 'sku',             helm_field: 'FR.line.sku (via SKU mapping)' },
-        { customer_col: 'qty',             helm_field: 'FR.line.qty' },
-        { customer_col: 'recipient_name',  helm_field: 'FR.end_recipient.name' },
-        { customer_col: 'recipient_addr',  helm_field: 'FR.end_recipient.address' },
-        { customer_col: 'special_note',    helm_field: 'FR.notes (free-text)' },
-      ],
-      sample_row: {
-        lec_ref: 'LEC-1208',
-        sku: 'TBL-TXT-72',
-        qty: '1',
-        recipient_name: 'Margaret O\'Brien',
-        recipient_addr: '88 Beacon St, Boston, MA 02108',
-        special_note: 'Gift wrap requested',
-      },
-      sample_output: [
-        { pr_number: 'FR-3139', sku: 'TBL-TXT-72', fabric: 'Textured Linen', design: 'Textured / Natural', qty: 1, unit: 'tablecloth' },
-      ],
-    },
-    routing_guide: {
-      nas_root: '\\\\adt-nas\\artwork\\lemieux',
-      folder_convention: '{design}/{colorway}/production/*.tif',
-      strike_off_rule: 'Always — Lemieux requires a customer-approved strike-off on EVERY new design + colorway combination before production',
-      strike_off_approval: 'Customer email approval (tokenized link · 30-day expiry)',
-      hot_folder_destination: 'After strike-off approved → MS JP7 hot folder',
-    },
-    sku_mapping: [
-      { customer_sku: 'TBL-TXT-72', adt_sku: 'TBL-TXT-72', design: 'Textured', colorway: 'Natural', fabric: 'Textured Linen' },
-      { customer_sku: 'TBL-TXT-90', adt_sku: 'TBL-TXT-90', design: 'Textured', colorway: 'Natural', fabric: 'Textured Linen' },
-    ],
-    fulfillment: {
-      method: 'Customer-stored inventory — pull on Fulfillment Request',
-      label_mode: 'A',
-      label_mode_note: 'ADT logs into Lemieux\'s Shopify with stored credentials and prints the label from there.',
-    },
-    packaging: [
-      { product_type: 'Tablecloth', profile: 'Lemieux Premium Box', notes: 'Rigid gift box + tissue + LEC monogram band' },
-    ],
-    shipping: {
-      preferred_carrier: 'FedEx',
-      service_level: 'Ground',
-      blind_ship_default: true,
-      third_party_billed: false,
-    },
-    billing: {
-      credit_hold: false,
-      payment_terms: 'Net 30',
-      overage_policy: 'N/A (stored model)',
-      overage_tolerance_pct: 0,
-      pricing_variance_threshold: 'Admin-configured · strict (Megan reviews any variance)',
-      po_required: false,
-      invoice_routing: 'Per-shipment invoice to ap@lemieuxetcie.example',
-    },
-    production_requirements: [
-      { kind: 'Fabric restrictions', value: 'Textured Linen only (per current contract)' },
-      { kind: 'Inspection threshold', value: 'High — color match within ΔE 1.5; no visible weave defects' },
-      { kind: 'Finishing', value: 'Edge hemmed; LEC woven label sewn on corner' },
-    ],
-    credentials: [
-      { kind: 'Shopify', value: 'lemieux-et-cie.myshopify.com · API token ★★★★★★★★ (rotated 2026-03-15)' },
-      { kind: 'Orders email watcher', value: 'orders@adt.example listens for sender contains "lemieuxetcie.example" + attachment .csv' },
-    ],
-  },
+const PRESETS: Preset[] = [
+  { slug: 'stfrank',         display_name: 'St. Frank',          status: 'Active', customer_id_label: 'CUST-014' },
+  { slug: 'inside-havenly',  display_name: 'Inside / Havenly',   status: 'Active', customer_id_label: 'CUST-022' },
+  { slug: 'laura-park',      display_name: 'Laura Park Designs', status: 'Active', customer_id_label: 'CUST-031' },
+  { slug: 'house-of-mbr',    display_name: 'House of MBR',       status: 'Active', customer_id_label: 'CUST-037' },
+  { slug: 'lemieux',         display_name: 'Lemieux Et Cie',     status: 'Draft',  customer_id_label: 'CUST-044' },
 ];
+
+// =====================================================================
+// Option lists
+// =====================================================================
+
+const INTAKE_SOURCE_TYPES = [
+  'SFTP — customer pushes files to ADT SFTP path',
+  'Email attachment — Helm watches an inbox',
+  'Hot folder — file watcher on a NAS path',
+  'API push — customer system posts to Helm endpoint',
+  'Shopify webhook — Shopify posts orders to Helm',
+  'Manual upload (CSR uploads file via Helm UI)',
+];
+const FILE_FORMATS = ['CSV', 'XML', 'JSON', 'EDI 850 (mapped)'];
+const SCHEDULES = [
+  'Real-time (event-driven)',
+  'Every 5 min',
+  'Every 15 min',
+  'Every 30 min',
+  'Hourly',
+  'Daily at 06:00 PT',
+  'Manual trigger only',
+];
+const HELM_FIELDS = [
+  'Order.po_number',
+  'Order.customer_requested_date',
+  'Order.notes',
+  'PR.sku_id (via SKU mapping)',
+  'PR.design_id',
+  'PR.colorway_id',
+  'PR.planned_yardage',
+  'PR.fabric_id',
+  'PR.quantity',
+  'FR.source_id',
+  'FR.line.sku',
+  'FR.line.qty',
+  'FR.end_recipient.name',
+  'FR.end_recipient.address',
+  'FR.notes',
+  'ShipToAddress.name',
+  'ShipToAddress.line1',
+  'ShipToAddress.line2',
+  'ShipToAddress.city',
+  'ShipToAddress.state',
+  'ShipToAddress.zip',
+  'FR.label_artifact (file attachment)',
+];
+const TRANSFORMS = ['none', 'uppercase', 'lowercase', 'trim', 'date YYYY-MM-DD', 'lookup table'];
+const EXPORT_TRIGGERS = [
+  'On Fulfillment Request packed',
+  'On Production Order Ready to Ship',
+  'On batch (daily 07:00 PT)',
+  'On batch (every 4 hours)',
+  'Manual export only',
+];
+const EXPORT_FORMATS = ['CSV (FedEx import)', 'CSV (UPS import)', 'XML (FedEx Ship Manager)', 'XML (UPS WorldShip)', 'JSON (generic)'];
+const ARCHIVE_FORMATS = ['PDF', 'HTML', 'CSV row + original payload', 'EDI 856 (ASN)'];
+const FULFILLMENT_MODES = [
+  'Direct-to-customer (production ships to customer warehouse)',
+  'Stored inventory (Bundle pulled on Fulfillment Request)',
+  'Mixed (some SKUs direct, others stored)',
+];
+const LABEL_MODES = [
+  'Mode A — ADT logs into customer Shopify (stored credentials)',
+  'Mode B — ADT prints via customer\'s carrier account',
+  'Mode C — Customer supplies pre-paid label',
+  'N/A (direct-to-customer)',
+];
+const CARRIERS = ['UPS', 'FedEx', 'USPS', 'DHL', 'Customer-supplied label'];
+const STRIKEOFF_RULES = [
+  'Always — every new design + colorway combo',
+  'First-run only — only when Design + Colorway + Fabric has never been produced',
+  'New colorway only',
+  'New fabric only',
+  'Never (pre-approved combos)',
+];
+const STRIKEOFF_APPROVAL = [
+  'Internal only (Colorist reviews; no customer email)',
+  'Customer-approved (tokenized email link · 30-day expiry)',
+];
+const PRINT_PROFILES = ['Cotton Sateen 110-thread · Default', 'Cotton Sateen 90-thread · Default', 'Linen Blend Natural · Default', 'Velvet Cotton · Default', 'Customer-Supplied · per-PR'];
+const COLORISTS = ['Jeannine Rivera', 'Maya Chen', 'Auto-assign (round-robin)'];
+const FABRIC_OPTIONS = ['Cotton Sateen 110-thread', 'Cotton Sateen 90-thread', 'Linen Blend Natural', 'Velvet Cotton', 'Textured Linen', 'Performance Outdoor'];
+const HOT_FOLDERS = ['MS JP4 hot folder', 'MS JP7 hot folder', 'Durst Alpha 330 hot folder', 'Zimmer Colaris hot folder', 'HP Latex 830W hot folder', 'HP Latex 800W hot folder'];
+
+// =====================================================================
+// Initial form values for a preset (rough mock — fields admins would tweak)
+// =====================================================================
+
+type FieldMappingRow = { id: string; source_col: string; helm_field: string; required: boolean; default_value: string; transform: string; notes: string };
+type SKUMapRow = { id: string; customer_sku: string; adt_sku: string; design: string; colorway: string; fabric: string };
+type ShipExportColumn = { id: string; export_col: string; helm_value: string };
+type HotFolderOverride = { id: string; fabric: string; hot_folder: string };
+
+const empty = () => ({
+  customer_name: '',
+  customer_id_label: '',
+  status: 'Draft' as 'Active' | 'Draft' | 'Inactive',
+  tags: '',
+  intake_source: '',
+  source_path: '',
+  schedule: '',
+  file_format: '',
+  file_naming: '',
+  auto_route: true,
+  field_mapping: [] as FieldMappingRow[],
+  sku_mapping: [] as SKUMapRow[],
+  ship_export_folder: '',
+  ship_export_format: '',
+  ship_export_trigger: '',
+  ship_export_naming: '',
+  ship_export_columns: [] as ShipExportColumn[],
+  archive_folder: '',
+  archive_format: '',
+  archive_naming: '',
+  archive_retention_days: '365',
+  default_hot_folder: '',
+  hot_folder_overrides: [] as HotFolderOverride[],
+  fulfillment_mode: '',
+  label_mode: '',
+  blind_ship_default: false,
+  preferred_carrier: '',
+  default_print_profile: '',
+  strikeoff_rule: '',
+  strikeoff_approval: '',
+  default_colorist: '',
+});
+
+const stfrankPreset = () => ({
+  ...empty(),
+  customer_name: 'St. Frank',
+  customer_id_label: 'CUST-014',
+  status: 'Active' as const,
+  tags: 'csv, sftp, direct-ship',
+  intake_source: INTAKE_SOURCE_TYPES[0],
+  source_path: 'sftp://sftp.adt.example/incoming/stfrank/',
+  schedule: SCHEDULES[2],
+  file_format: 'CSV',
+  file_naming: 'stfrank_po_{YYYYMMDD}_{HHMM}.csv',
+  auto_route: true,
+  field_mapping: [
+    { id: 'fm1', source_col: 'po_number',           helm_field: 'Order.po_number',                  required: true,  default_value: '', transform: 'none', notes: '' },
+    { id: 'fm2', source_col: 'customer_sku',        helm_field: 'PR.sku_id (via SKU mapping)',      required: true,  default_value: '', transform: 'none', notes: 'Resolved through SKU Mapping table below' },
+    { id: 'fm3', source_col: 'qty_yards',           helm_field: 'PR.planned_yardage',               required: true,  default_value: '', transform: 'none', notes: '' },
+    { id: 'fm4', source_col: 'requested_ship_date', helm_field: 'Order.customer_requested_date',    required: true,  default_value: '', transform: 'date YYYY-MM-DD', notes: '' },
+    { id: 'fm5', source_col: 'ship_to_name',        helm_field: 'ShipToAddress.name',               required: true,  default_value: '', transform: 'trim', notes: '' },
+    { id: 'fm6', source_col: 'ship_to_addr_1',      helm_field: 'ShipToAddress.line1',              required: true,  default_value: '', transform: 'trim', notes: '' },
+    { id: 'fm7', source_col: 'ship_to_city',        helm_field: 'ShipToAddress.city',               required: true,  default_value: '', transform: 'trim', notes: '' },
+    { id: 'fm8', source_col: 'ship_to_state',       helm_field: 'ShipToAddress.state',              required: true,  default_value: '', transform: 'uppercase', notes: '2-char state code' },
+    { id: 'fm9', source_col: 'ship_to_zip',         helm_field: 'ShipToAddress.zip',                required: true,  default_value: '', transform: 'none', notes: '' },
+    { id: 'fm10', source_col: 'notes',              helm_field: 'Order.notes',                      required: false, default_value: '', transform: 'none', notes: 'Free-text; not used for routing' },
+  ],
+  sku_mapping: [
+    { id: 's1', customer_sku: 'SF-CYP-Y15', adt_sku: 'CYP-IND-Yardage', design: 'Cypress',  colorway: 'Indigo', fabric: 'Cotton Sateen 110-thread' },
+    { id: 's2', customer_sku: 'SF-MAR-Y15', adt_sku: 'MAR-WHT-Yardage', design: 'Marigold', colorway: 'White',  fabric: 'Linen Blend Natural' },
+    { id: 's3', customer_sku: 'SF-COR-Y15', adt_sku: 'COR-PINK-Yardage', design: 'Coral',   colorway: 'Pink',   fabric: 'Cotton Sateen 90-thread' },
+  ],
+  ship_export_folder: '\\\\adt-nas\\shipping-exports\\stfrank\\outbound\\',
+  ship_export_format: EXPORT_FORMATS[0],
+  ship_export_trigger: EXPORT_TRIGGERS[1],
+  ship_export_naming: 'stfrank_fedex_{YYYYMMDD}_{HHMM}.csv',
+  ship_export_columns: [
+    { id: 'sc1', export_col: 'order_number',  helm_value: 'Order.order_number' },
+    { id: 'sc2', export_col: 'recipient',     helm_value: 'ShipToAddress.name' },
+    { id: 'sc3', export_col: 'address1',      helm_value: 'ShipToAddress.line1' },
+    { id: 'sc4', export_col: 'city',          helm_value: 'ShipToAddress.city' },
+    { id: 'sc5', export_col: 'state',         helm_value: 'ShipToAddress.state' },
+    { id: 'sc6', export_col: 'zip',           helm_value: 'ShipToAddress.zip' },
+    { id: 'sc7', export_col: 'weight_lb',     helm_value: 'ShipmentPackage.weight' },
+    { id: 'sc8', export_col: 'service_level', helm_value: 'literal: FEDEX_GROUND' },
+  ],
+  archive_folder: '\\\\adt-nas\\archive\\stfrank\\packing-lists\\{YYYY}\\{MM}\\',
+  archive_format: ARCHIVE_FORMATS[0],
+  archive_naming: 'stfrank_pl_{order_number}_{YYYYMMDD}.pdf',
+  archive_retention_days: '2555',
+  default_hot_folder: HOT_FOLDERS[0],
+  hot_folder_overrides: [
+    { id: 'ho1', fabric: 'Linen Blend Natural', hot_folder: HOT_FOLDERS[1] },
+  ],
+  fulfillment_mode: FULFILLMENT_MODES[0],
+  label_mode: LABEL_MODES[3],
+  blind_ship_default: false,
+  preferred_carrier: CARRIERS[1],
+  default_print_profile: PRINT_PROFILES[0],
+  strikeoff_rule: STRIKEOFF_RULES[1],
+  strikeoff_approval: STRIKEOFF_APPROVAL[0],
+  default_colorist: COLORISTS[0],
+});
+
+const insidePreset = () => ({
+  ...empty(),
+  customer_name: 'Inside / Havenly',
+  customer_id_label: 'CUST-022',
+  status: 'Active' as const,
+  tags: 'shopify, stored-inventory, label-mode-A, blind-ship',
+  intake_source: INTAKE_SOURCE_TYPES[1],
+  source_path: 'fulfillment@adt.example (filter: sender contains "inside.example")',
+  schedule: SCHEDULES[0],
+  file_format: 'CSV',
+  file_naming: 'inside_packing_list_{INS-NNN}.csv (extracted from email body)',
+  auto_route: true,
+  field_mapping: [
+    { id: 'fm1', source_col: 'shopify_order_id', helm_field: 'FR.source_id',              required: true,  default_value: '', transform: 'none', notes: 'Becomes FulfillmentRequest entity (C22), not Production Order' },
+    { id: 'fm2', source_col: 'shopify_sku',      helm_field: 'FR.line.sku',               required: true,  default_value: '', transform: 'none', notes: 'Resolved through SKU Mapping table below' },
+    { id: 'fm3', source_col: 'qty',              helm_field: 'FR.line.qty',               required: true,  default_value: '', transform: 'none', notes: '' },
+    { id: 'fm4', source_col: 'recipient_name',   helm_field: 'FR.end_recipient.name',     required: true,  default_value: '', transform: 'trim', notes: '' },
+    { id: 'fm5', source_col: 'recipient_addr',   helm_field: 'FR.end_recipient.address',  required: true,  default_value: '', transform: 'trim', notes: 'Multi-line address parsed downstream' },
+    { id: 'fm6', source_col: 'shipping_method',  helm_field: 'FR.notes',                  required: false, default_value: 'Standard', transform: 'none', notes: 'Mapped to carrier service downstream' },
+  ],
+  sku_mapping: [
+    { id: 's1', customer_sku: 'CYP-IND-PLW-18', adt_sku: 'PLW-CYP-18x18', design: 'Cypress',  colorway: 'Indigo', fabric: 'Cotton Sateen 110-thread' },
+    { id: 's2', customer_sku: 'CYP-IND-PLW-20', adt_sku: 'PLW-CYP-20x20', design: 'Cypress',  colorway: 'Indigo', fabric: 'Cotton Sateen 110-thread' },
+    { id: 's3', customer_sku: 'MAR-WHT-PLW-14', adt_sku: 'PLW-MAR-14x14', design: 'Marigold', colorway: 'White',  fabric: 'Linen Blend Natural' },
+  ],
+  ship_export_folder: 'N/A (label printed via Shopify; no export file)',
+  ship_export_format: EXPORT_FORMATS[2],
+  ship_export_trigger: EXPORT_TRIGGERS[0],
+  ship_export_naming: 'N/A',
+  ship_export_columns: [],
+  archive_folder: '\\\\adt-nas\\archive\\inside\\packing-lists\\{YYYY}\\{MM}\\',
+  archive_format: ARCHIVE_FORMATS[0],
+  archive_naming: 'inside_pl_{fr_number}_{YYYYMMDD}.pdf',
+  archive_retention_days: '1825',
+  default_hot_folder: 'N/A (pulled from stored inventory)',
+  hot_folder_overrides: [],
+  fulfillment_mode: FULFILLMENT_MODES[1],
+  label_mode: LABEL_MODES[0],
+  blind_ship_default: true,
+  preferred_carrier: CARRIERS[0],
+  default_print_profile: PRINT_PROFILES[0],
+  strikeoff_rule: STRIKEOFF_RULES[4],
+  strikeoff_approval: 'N/A',
+  default_colorist: COLORISTS[0],
+});
+
+function presetFor(slug: string) {
+  switch (slug) {
+    case 'stfrank':         return stfrankPreset();
+    case 'inside-havenly':  return insidePreset();
+    case 'laura-park':      return { ...insidePreset(), customer_name: 'Laura Park Designs', customer_id_label: 'CUST-031', tags: 'csv, email, stored-inventory, label-mode-A',
+                                      intake_source: INTAKE_SOURCE_TYPES[1], source_path: 'orders@adt.example (sender contains "laurapark.example")',
+                                      schedule: SCHEDULES[3], file_naming: 'lpd_fulfillment_{YYYYMMDD}.csv' };
+    case 'house-of-mbr':    return { ...insidePreset(), customer_name: 'House of MBR', customer_id_label: 'CUST-037', tags: 'csv, email, stored-inventory, label-mode-C',
+                                      intake_source: INTAKE_SOURCE_TYPES[1], source_path: 'orders@adt.example (sender contains "hofmbr.example")',
+                                      file_naming: 'mbr_fulfill_{YYYYMMDD}.csv', label_mode: LABEL_MODES[2], preferred_carrier: CARRIERS[4] };
+    case 'lemieux':         return { ...insidePreset(), customer_name: 'Lemieux Et Cie', customer_id_label: 'CUST-044', status: 'Draft' as const,
+                                      tags: 'csv, email, stored-inventory, label-mode-A, strike-off-always',
+                                      intake_source: INTAKE_SOURCE_TYPES[1], source_path: 'orders@adt.example (sender contains "lemieuxetcie.example")',
+                                      file_naming: 'lemieux_orders_{YYYYMMDD}.csv',
+                                      strikeoff_rule: STRIKEOFF_RULES[0], strikeoff_approval: STRIKEOFF_APPROVAL[1] };
+    default: return empty();
+  }
+}
 
 // =====================================================================
 // Page
 // =====================================================================
 
-export default function CustomerConfigs({ searchParams }: { searchParams: { customer?: string } }) {
-  const slug = searchParams?.customer ?? CONFIGS[0].slug;
-  const cfg = CONFIGS.find((c) => c.slug === slug) ?? CONFIGS[0];
+let idCounter = 100;
+const nextId = () => `gen-${idCounter++}`;
+
+export default function CustomerConfigsAdmin() {
+  const [activeSlug, setActiveSlug] = useState<string>('stfrank');
+  const [form, setForm] = useState(() => presetFor('stfrank'));
+
+  const switchTo = (slug: string) => {
+    setActiveSlug(slug);
+    setForm(slug === '__new' ? empty() : presetFor(slug));
+  };
+
+  const update = <K extends keyof ReturnType<typeof empty>>(key: K, value: ReturnType<typeof empty>[K]) =>
+    setForm((f) => ({ ...f, [key]: value }));
+
+  // Field mapping row operations
+  const addFieldMapping = () => setForm((f) => ({ ...f, field_mapping: [...f.field_mapping, { id: nextId(), source_col: '', helm_field: '', required: false, default_value: '', transform: 'none', notes: '' }] }));
+  const removeFieldMapping = (id: string) => setForm((f) => ({ ...f, field_mapping: f.field_mapping.filter((r) => r.id !== id) }));
+  const updateFieldMapping = (id: string, patch: Partial<FieldMappingRow>) => setForm((f) => ({ ...f, field_mapping: f.field_mapping.map((r) => r.id === id ? { ...r, ...patch } : r) }));
+
+  // SKU mapping row operations
+  const addSKUMap = () => setForm((f) => ({ ...f, sku_mapping: [...f.sku_mapping, { id: nextId(), customer_sku: '', adt_sku: '', design: '', colorway: '', fabric: '' }] }));
+  const removeSKUMap = (id: string) => setForm((f) => ({ ...f, sku_mapping: f.sku_mapping.filter((r) => r.id !== id) }));
+  const updateSKUMap = (id: string, patch: Partial<SKUMapRow>) => setForm((f) => ({ ...f, sku_mapping: f.sku_mapping.map((r) => r.id === id ? { ...r, ...patch } : r) }));
+
+  // Shipping export columns
+  const addShipCol = () => setForm((f) => ({ ...f, ship_export_columns: [...f.ship_export_columns, { id: nextId(), export_col: '', helm_value: '' }] }));
+  const removeShipCol = (id: string) => setForm((f) => ({ ...f, ship_export_columns: f.ship_export_columns.filter((r) => r.id !== id) }));
+  const updateShipCol = (id: string, patch: Partial<ShipExportColumn>) => setForm((f) => ({ ...f, ship_export_columns: f.ship_export_columns.map((r) => r.id === id ? { ...r, ...patch } : r) }));
+
+  // Hot folder overrides
+  const addHotFolder = () => setForm((f) => ({ ...f, hot_folder_overrides: [...f.hot_folder_overrides, { id: nextId(), fabric: '', hot_folder: '' }] }));
+  const removeHotFolder = (id: string) => setForm((f) => ({ ...f, hot_folder_overrides: f.hot_folder_overrides.filter((r) => r.id !== id) }));
+  const updateHotFolder = (id: string, patch: Partial<HotFolderOverride>) => setForm((f) => ({ ...f, hot_folder_overrides: f.hot_folder_overrides.map((r) => r.id === id ? { ...r, ...patch } : r) }));
+
+  const isNew = activeSlug === '__new';
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-12">
-      <header>
-        <h1 className="text-2xl font-bold text-navy-900">Customer Configurations</h1>
+    <div className="max-w-7xl mx-auto pb-32">
+      <header className="mb-6">
+        <h1 className="text-2xl font-bold text-navy-900">Customer CSV/XML Configurations</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Per C2 (Customer Profile) · how Helm understands each customer's intake source, routing guide, SKU mapping, fulfillment method, packaging, shipping, billing, and production rules · drives C9 (file routing + strike-off initiation) and C10 (CSV/XML intake) downstream.
+          Admin tool for onboarding new CSV / XML / email-driven customers and editing existing pipelines · drives C9 (file routing + strike-off initiation) and C10 (CSV/XML intake) downstream.
         </p>
       </header>
 
-      {/* Customer tab selector */}
-      <div className="border-b border-gray-200 flex flex-wrap gap-1">
-        {CONFIGS.map((c) => (
-          <Link
-            key={c.slug}
-            href={`/customer-configs?customer=${c.slug}`}
-            className={`px-4 py-2.5 border-b-2 text-sm font-semibold ${
-              c.slug === cfg.slug
+      {/* Customer tab bar */}
+      <div className="border-b border-gray-200 flex flex-wrap gap-1 mb-6">
+        {PRESETS.map((p) => (
+          <button
+            key={p.slug}
+            onClick={() => switchTo(p.slug)}
+            className={`px-4 py-2.5 border-b-2 text-sm font-semibold flex items-center gap-2 ${
+              p.slug === activeSlug
                 ? 'border-navy-700 text-navy-900'
                 : 'border-transparent text-gray-500 hover:text-navy-700 hover:border-gray-300'
             }`}
           >
-            {c.name}
-          </Link>
+            {p.display_name}
+            {p.status === 'Draft' && <Tag color="yellow">Draft</Tag>}
+            {p.status === 'Inactive' && <Tag color="gray">Inactive</Tag>}
+          </button>
         ))}
+        <button
+          onClick={() => switchTo('__new')}
+          className={`px-4 py-2.5 border-b-2 text-sm font-semibold flex items-center gap-1.5 ml-auto ${
+            isNew
+              ? 'border-cyan-500 text-cyan-700'
+              : 'border-transparent text-cyan-600 hover:text-cyan-700 hover:border-cyan-300'
+          }`}
+        >
+          <Plus className="w-4 h-4" /> Add New Customer Config
+        </button>
       </div>
 
-      {/* Customer header */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <h2 className="text-xl font-bold text-navy-900">{cfg.name}</h2>
-        {cfg.tags.map((t) => <Tag key={t} color="blue">{t}</Tag>)}
-      </div>
+      {/* Form sections */}
 
-      {/* SECTION 1: Order Intake & Source */}
-      <Card>
-        <CardHeader title="1 · Order Intake & Source" subtitle="How orders for this customer enter Helm" />
-        <div className="p-5 space-y-5">
-          <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-            <KV label="Source"        value={cfg.intake.source} />
-            <KV label="Method"        value={cfg.intake.method} />
-            <KV label="Schedule"      value={cfg.intake.schedule} />
-            <KV label="File format"   value={cfg.intake.file_format} mono />
-            <KV label="File naming"   value={cfg.intake.file_naming} mono />
-            <KV label="Auto-route"    value={cfg.intake.auto_route ? 'Enabled (per C10 → C9 downstream)' : 'Disabled — manual CSR review'} />
-          </div>
+      {/* SECTION 1 — Customer Identity */}
+      <Card className="mb-5">
+        <CardHeader title="1 · Customer Identity" />
+        <div className="p-5 grid grid-cols-3 gap-x-4 gap-y-3">
+          <FormField label="Customer name" required>
+            <Input value={form.customer_name} onChange={(v) => update('customer_name', v)} placeholder="e.g. St. Frank" />
+          </FormField>
+          <FormField label="Customer ID">
+            <Input value={form.customer_id_label} onChange={(v) => update('customer_id_label', v)} placeholder="auto-assigned" />
+          </FormField>
+          <FormField label="Status">
+            <Select value={form.status} onChange={(v) => update('status', v as any)} options={['Draft', 'Active', 'Inactive']} />
+          </FormField>
+          <FormField label="Tags" hint="Comma-separated · used to surface operational characteristics on the dashboard" className="col-span-3">
+            <Input value={form.tags} onChange={(v) => update('tags', v)} placeholder="csv, sftp, direct-ship" />
+          </FormField>
+        </div>
+      </Card>
 
-          {/* Field mapping */}
-          <div>
-            <div className="text-xs uppercase tracking-wider font-semibold text-navy-700 mb-2">Field mapping (customer column → Helm field)</div>
-            <table className="w-full text-xs border border-gray-200 rounded overflow-hidden">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="text-left px-3 py-2 font-semibold text-gray-700">Customer column</th>
-                  <th className="text-left px-3 py-2 font-semibold text-gray-700">→</th>
-                  <th className="text-left px-3 py-2 font-semibold text-gray-700">Helm field</th>
-                  <th className="text-left px-3 py-2 font-semibold text-gray-700">Notes</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cfg.intake.field_mapping.map((fm, i) => (
-                  <tr key={i} className="border-t border-gray-200">
-                    <td className="px-3 py-1.5 font-mono">{fm.customer_col}</td>
-                    <td className="px-3 py-1.5 text-gray-400">→</td>
-                    <td className="px-3 py-1.5 font-mono text-navy-700">{fm.helm_field}</td>
-                    <td className="px-3 py-1.5 text-gray-600 italic">{fm.notes || ''}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Sample row → sample output */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <div className="text-xs uppercase tracking-wider font-semibold text-navy-700 mb-2">Sample incoming row</div>
-              <div className="border border-gray-200 rounded p-3 bg-gray-50 text-xs font-mono space-y-0.5">
-                {Object.entries(cfg.intake.sample_row).map(([k, v]) => (
-                  <div key={k}><span className="text-gray-500">{k}:</span> {v}</div>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs uppercase tracking-wider font-semibold text-navy-700 mb-2">Resulting Helm record</div>
-              <div className="border border-navy-500 rounded p-3 bg-navy-50 text-xs space-y-2">
-                {cfg.intake.sample_output.map((o, i) => (
-                  <div key={i} className="font-mono">
-                    <div><span className="text-gray-500">→ Generated:</span> <strong className="text-navy-700">{o.pr_number}</strong></div>
-                    <div><span className="text-gray-500">  SKU:</span> {o.sku}</div>
-                    <div><span className="text-gray-500">  Design:</span> {o.design}</div>
-                    <div><span className="text-gray-500">  Fabric:</span> {o.fabric}</div>
-                    <div><span className="text-gray-500">  Qty:</span> {o.qty} {o.unit}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Recent imports */}
-          <div>
-            <div className="text-xs uppercase tracking-wider font-semibold text-navy-700 mb-2">Recent imports</div>
-            <table className="w-full text-xs">
-              <thead className="text-gray-500 border-b border-gray-200">
-                <tr>
-                  <th className="text-left px-3 py-1.5">Run time</th>
-                  <th className="text-right px-3 py-1.5">Rows</th>
-                  <th className="text-right px-3 py-1.5">PRs / FRs created</th>
-                  <th className="text-right px-3 py-1.5">Failed</th>
-                </tr>
-              </thead>
-              <tbody>
-                {cfg.intake.recent_imports.map((r, i) => (
-                  <tr key={i} className="border-t border-gray-100">
-                    <td className="px-3 py-1.5 font-mono">{r.date}</td>
-                    <td className="px-3 py-1.5 text-right font-mono">{r.rows}</td>
-                    <td className="px-3 py-1.5 text-right font-mono">{r.pr_created}</td>
-                    <td className="px-3 py-1.5 text-right">
-                      {r.failed > 0 ? <Tag color="red">{r.failed}</Tag> : <span className="text-gray-400 font-mono">0</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* SECTION 2 — Intake Source */}
+      <Card className="mb-5">
+        <CardHeader title="2 · Intake Source" subtitle="Where incoming order / fulfillment files land" />
+        <div className="p-5 grid grid-cols-2 gap-x-4 gap-y-3">
+          <FormField label="Source type" required>
+            <Select value={form.intake_source} onChange={(v) => update('intake_source', v)} options={INTAKE_SOURCE_TYPES} placeholder="Select source type…" />
+          </FormField>
+          <FormField label="Schedule">
+            <Select value={form.schedule} onChange={(v) => update('schedule', v)} options={SCHEDULES} placeholder="Select schedule…" />
+          </FormField>
+          <FormField label="Source path / address" required hint="SFTP URL, email address with filter, NAS path, API endpoint, etc." className="col-span-2">
+            <Input value={form.source_path} onChange={(v) => update('source_path', v)} mono placeholder="sftp://…   or   orders@adt.example (sender contains…)   or   \\adt-nas\incoming\…" />
+          </FormField>
+          <FormField label="File format" required>
+            <Select value={form.file_format} onChange={(v) => update('file_format', v)} options={FILE_FORMATS} placeholder="Select format…" />
+          </FormField>
+          <FormField label="File naming pattern" hint="Tokens: {YYYY} {MM} {DD} {HH} {MM_24} {customer} {customer_ref}">
+            <Input value={form.file_naming} onChange={(v) => update('file_naming', v)} mono placeholder="cust_orders_{YYYYMMDD}.csv" />
+          </FormField>
+          <FormField label="Auto-route to production" hint="When enabled, intake routes via C9 directly; otherwise CSR review is required" className="col-span-2">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={form.auto_route} onChange={(e) => update('auto_route', e.target.checked)} className="w-4 h-4" />
+              Auto-route enabled
+            </label>
+          </FormField>
+          <div className="col-span-2">
+            <Button variant="secondary" size="sm"><KeyRound className="w-3.5 h-3.5 mr-1.5" />Manage Credentials</Button>
+            <span className="text-xs text-gray-500 ml-3 italic">SFTP keys, API tokens, email watcher rules · stored encrypted</span>
           </div>
         </div>
       </Card>
 
-      {/* SECTION 2: Routing Guide */}
-      <Card>
-        <CardHeader title="2 · Routing Guide (C9)" subtitle="How Helm locates the design file, decides whether a strike-off is required, and routes to the correct hot folder" />
-        <div className="p-5 grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
-          <KV label="NAS root"                value={cfg.routing_guide.nas_root} mono />
-          <KV label="Folder convention"       value={cfg.routing_guide.folder_convention} mono />
-          <KV label="Strike-off rule"         value={cfg.routing_guide.strike_off_rule} />
-          <KV label="Strike-off approval"     value={cfg.routing_guide.strike_off_approval} />
-          <KV label="Hot folder destination"  value={cfg.routing_guide.hot_folder_destination} colSpan />
-        </div>
-      </Card>
-
-      {/* SECTION 3: SKU Mapping */}
-      <Card>
-        <CardHeader title="3 · SKU Mapping" subtitle="Customer SKU → ADT SKU / Design / Colorway / Fabric · used by C9 for file resolution + C10 for intake translation" />
-        <table className="w-full text-xs">
-          <thead className="text-gray-500 uppercase tracking-wider border-b border-gray-200">
-            <tr>
-              <th className="text-left px-4 py-2">Customer SKU</th>
-              <th className="text-left px-4 py-2">ADT SKU</th>
-              <th className="text-left px-4 py-2">Design</th>
-              <th className="text-left px-4 py-2">Colorway</th>
-              <th className="text-left px-4 py-2 pr-5">Fabric</th>
-            </tr>
-          </thead>
-          <tbody>
-            {cfg.sku_mapping.map((s, i) => (
-              <tr key={i} className="border-t border-gray-100">
-                <td className="px-4 py-1.5 font-mono">{s.customer_sku}</td>
-                <td className="px-4 py-1.5 font-mono text-navy-700">{s.adt_sku}</td>
-                <td className="px-4 py-1.5">{s.design}</td>
-                <td className="px-4 py-1.5">{s.colorway}</td>
-                <td className="px-4 py-1.5 pr-5">{s.fabric}</td>
+      {/* SECTION 3 — Field Mapping */}
+      <Card className="mb-5">
+        <CardHeader
+          title="3 · Field Mapping"
+          subtitle="Incoming column → Helm field · runs against every row of every incoming file"
+          action={<Button size="sm" onClick={addFieldMapping}><Plus className="w-3.5 h-3.5 mr-1" />Add Mapping</Button>}
+        />
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="text-gray-500 uppercase tracking-wider border-b border-gray-200">
+              <tr>
+                <th className="text-left px-3 py-2">Source column</th>
+                <th className="text-left px-3 py-2">→ Helm field</th>
+                <th className="text-center px-3 py-2 w-20">Required</th>
+                <th className="text-left px-3 py-2">Default if missing</th>
+                <th className="text-left px-3 py-2">Transform</th>
+                <th className="text-left px-3 py-2">Notes</th>
+                <th className="w-8"></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {form.field_mapping.length === 0 && (
+                <tr><td colSpan={7} className="text-center py-6 text-sm text-gray-400 italic">No mappings yet. Click "Add Mapping" to define how incoming columns translate to Helm fields.</td></tr>
+              )}
+              {form.field_mapping.map((row) => (
+                <tr key={row.id} className="border-t border-gray-100">
+                  <td className="px-3 py-1.5"><Input value={row.source_col} onChange={(v) => updateFieldMapping(row.id, { source_col: v })} mono sm /></td>
+                  <td className="px-3 py-1.5"><Select value={row.helm_field} onChange={(v) => updateFieldMapping(row.id, { helm_field: v })} options={HELM_FIELDS} placeholder="—" sm /></td>
+                  <td className="px-3 py-1.5 text-center"><input type="checkbox" checked={row.required} onChange={(e) => updateFieldMapping(row.id, { required: e.target.checked })} className="w-4 h-4" /></td>
+                  <td className="px-3 py-1.5"><Input value={row.default_value} onChange={(v) => updateFieldMapping(row.id, { default_value: v })} sm /></td>
+                  <td className="px-3 py-1.5"><Select value={row.transform} onChange={(v) => updateFieldMapping(row.id, { transform: v })} options={TRANSFORMS} sm /></td>
+                  <td className="px-3 py-1.5"><Input value={row.notes} onChange={(v) => updateFieldMapping(row.id, { notes: v })} sm /></td>
+                  <td className="px-3 py-1.5"><RemoveBtn onClick={() => removeFieldMapping(row.id)} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </Card>
 
-      {/* SECTION 4 & 5: Fulfillment + Packaging side-by-side */}
-      <div className="grid grid-cols-2 gap-6">
-        <Card>
-          <CardHeader title="4 · Fulfillment Method" />
-          <div className="p-5 space-y-3 text-sm">
-            <KV label="Method" value={cfg.fulfillment.method} />
-            {cfg.fulfillment.label_mode && (
-              <>
-                <KV label="Label mode" value={`Mode ${cfg.fulfillment.label_mode}`} />
-                <div className="text-xs text-gray-600 italic pl-1 -mt-2">{cfg.fulfillment.label_mode_note}</div>
-              </>
-            )}
-          </div>
-        </Card>
-        <Card>
-          <CardHeader title="5 · Packaging Rules" subtitle="Default packaging profile(s) per product type" />
-          <div className="p-5 space-y-3 text-sm">
-            {cfg.packaging.map((p, i) => (
-              <div key={i} className="border-l-2 border-navy-500 pl-3">
-                <div className="font-semibold">{p.product_type}</div>
-                <div className="text-xs">{p.profile}</div>
-                {p.notes && <div className="text-xs text-gray-500 italic mt-0.5">{p.notes}</div>}
+      {/* SECTION 4 — SKU Mapping */}
+      <Card className="mb-5">
+        <CardHeader
+          title="4 · SKU Mapping"
+          subtitle="Customer SKU → ADT SKU / Design / Colorway / Fabric"
+          action={
+            <div className="flex gap-2">
+              <Button variant="secondary" size="sm"><Upload className="w-3.5 h-3.5 mr-1" />Bulk Import</Button>
+              <Button size="sm" onClick={addSKUMap}><Plus className="w-3.5 h-3.5 mr-1" />Add SKU</Button>
+            </div>
+          }
+        />
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead className="text-gray-500 uppercase tracking-wider border-b border-gray-200">
+              <tr>
+                <th className="text-left px-3 py-2">Customer SKU</th>
+                <th className="text-left px-3 py-2">ADT SKU</th>
+                <th className="text-left px-3 py-2">Design</th>
+                <th className="text-left px-3 py-2">Colorway</th>
+                <th className="text-left px-3 py-2">Fabric</th>
+                <th className="w-8"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {form.sku_mapping.length === 0 && (
+                <tr><td colSpan={6} className="text-center py-6 text-sm text-gray-400 italic">No SKU mappings yet.</td></tr>
+              )}
+              {form.sku_mapping.map((row) => (
+                <tr key={row.id} className="border-t border-gray-100">
+                  <td className="px-3 py-1.5"><Input value={row.customer_sku} onChange={(v) => updateSKUMap(row.id, { customer_sku: v })} mono sm /></td>
+                  <td className="px-3 py-1.5"><Input value={row.adt_sku} onChange={(v) => updateSKUMap(row.id, { adt_sku: v })} mono sm /></td>
+                  <td className="px-3 py-1.5"><Input value={row.design} onChange={(v) => updateSKUMap(row.id, { design: v })} sm /></td>
+                  <td className="px-3 py-1.5"><Input value={row.colorway} onChange={(v) => updateSKUMap(row.id, { colorway: v })} sm /></td>
+                  <td className="px-3 py-1.5"><Select value={row.fabric} onChange={(v) => updateSKUMap(row.id, { fabric: v })} options={FABRIC_OPTIONS} sm placeholder="Select fabric…" /></td>
+                  <td className="px-3 py-1.5"><RemoveBtn onClick={() => removeSKUMap(row.id)} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* SECTION 5 — Output Destinations */}
+      <Card className="mb-5 border-navy-500 border-2">
+        <CardHeader title="5 · Output Destinations" subtitle="Where Helm writes outbound files for downstream systems (FedEx/UPS import, packing list archive, production hot folder routing)" />
+        <div className="p-5 space-y-6">
+
+          {/* 5a — Shipping Export */}
+          <div>
+            <h3 className="text-sm font-bold text-navy-900 mb-2 flex items-center gap-2"><FolderOutput className="w-4 h-4" /> 5a · Shipping Export (for FedEx / UPS to import for label printing)</h3>
+            <p className="text-xs text-gray-500 mb-3 italic">Helm writes a file to this folder when the trigger fires. FedEx Ship Manager / UPS WorldShip watches the folder and uses the file to print labels.</p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+              <FormField label="Output folder" required hint="UNC path / S3 bucket / SFTP destination">
+                <Input value={form.ship_export_folder} onChange={(v) => update('ship_export_folder', v)} mono placeholder="\\adt-nas\shipping-exports\…" />
+              </FormField>
+              <FormField label="Export format" required>
+                <Select value={form.ship_export_format} onChange={(v) => update('ship_export_format', v)} options={EXPORT_FORMATS} placeholder="Select format…" />
+              </FormField>
+              <FormField label="Trigger event" required>
+                <Select value={form.ship_export_trigger} onChange={(v) => update('ship_export_trigger', v)} options={EXPORT_TRIGGERS} placeholder="Select trigger…" />
+              </FormField>
+              <FormField label="Output file naming">
+                <Input value={form.ship_export_naming} onChange={(v) => update('ship_export_naming', v)} mono placeholder="cust_fedex_{YYYYMMDD}_{HHMM}.csv" />
+              </FormField>
+            </div>
+
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs uppercase tracking-wider font-semibold text-navy-700">Export columns (what Helm writes to each row)</div>
+                <Button size="sm" variant="secondary" onClick={addShipCol}><Plus className="w-3.5 h-3.5 mr-1" />Add Column</Button>
               </div>
-            ))}
+              <table className="w-full text-xs border border-gray-200 rounded">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left px-3 py-1.5">Export column</th>
+                    <th className="text-left px-3 py-1.5">Helm value</th>
+                    <th className="w-8"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {form.ship_export_columns.length === 0 && (
+                    <tr><td colSpan={3} className="text-center py-4 text-gray-400 italic">No columns defined.</td></tr>
+                  )}
+                  {form.ship_export_columns.map((row) => (
+                    <tr key={row.id} className="border-t border-gray-200">
+                      <td className="px-3 py-1.5"><Input value={row.export_col} onChange={(v) => updateShipCol(row.id, { export_col: v })} mono sm /></td>
+                      <td className="px-3 py-1.5"><Input value={row.helm_value} onChange={(v) => updateShipCol(row.id, { helm_value: v })} mono sm placeholder="Helm field or literal: …" /></td>
+                      <td className="px-3 py-1.5"><RemoveBtn onClick={() => removeShipCol(row.id)} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-200"></div>
+
+          {/* 5b — Packing List Archive */}
+          <div>
+            <h3 className="text-sm font-bold text-navy-900 mb-2 flex items-center gap-2"><Archive className="w-4 h-4" /> 5b · Packing List Archive</h3>
+            <p className="text-xs text-gray-500 mb-3 italic">Helm writes each packing list to this archive folder. Used for compliance, dispute resolution, and audit.</p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+              <FormField label="Archive folder" required hint="Tokens supported in path: {YYYY} {MM} {DD}">
+                <Input value={form.archive_folder} onChange={(v) => update('archive_folder', v)} mono placeholder="\\adt-nas\archive\…\{YYYY}\{MM}\" />
+              </FormField>
+              <FormField label="Archive format" required>
+                <Select value={form.archive_format} onChange={(v) => update('archive_format', v)} options={ARCHIVE_FORMATS} placeholder="Select format…" />
+              </FormField>
+              <FormField label="Archive file naming">
+                <Input value={form.archive_naming} onChange={(v) => update('archive_naming', v)} mono placeholder="cust_pl_{order_number}_{YYYYMMDD}.pdf" />
+              </FormField>
+              <FormField label="Retention (days)" hint="Helm retains and is responsible for deletion after retention window">
+                <Input value={form.archive_retention_days} onChange={(v) => update('archive_retention_days', v)} mono />
+              </FormField>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-200"></div>
+
+          {/* 5c — Hot Folder Routing */}
+          <div>
+            <h3 className="text-sm font-bold text-navy-900 mb-2 flex items-center gap-2"><FolderInput className="w-4 h-4" /> 5c · Hot Folder Routing (production)</h3>
+            <p className="text-xs text-gray-500 mb-3 italic">When C9 (Design File Routing) sends a print file, it lands in the default hot folder unless a per-fabric override applies.</p>
+            <FormField label="Default hot folder" required>
+              <Select value={form.default_hot_folder} onChange={(v) => update('default_hot_folder', v)} options={HOT_FOLDERS} placeholder="Select printer hot folder…" />
+            </FormField>
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs uppercase tracking-wider font-semibold text-navy-700">Per-fabric overrides</div>
+                <Button size="sm" variant="secondary" onClick={addHotFolder}><Plus className="w-3.5 h-3.5 mr-1" />Add Override</Button>
+              </div>
+              <table className="w-full text-xs border border-gray-200 rounded">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="text-left px-3 py-1.5">Fabric</th>
+                    <th className="text-left px-3 py-1.5">→ Hot folder</th>
+                    <th className="w-8"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {form.hot_folder_overrides.length === 0 && (
+                    <tr><td colSpan={3} className="text-center py-4 text-gray-400 italic">No overrides — all jobs route to default.</td></tr>
+                  )}
+                  {form.hot_folder_overrides.map((row) => (
+                    <tr key={row.id} className="border-t border-gray-200">
+                      <td className="px-3 py-1.5"><Select value={row.fabric} onChange={(v) => updateHotFolder(row.id, { fabric: v })} options={FABRIC_OPTIONS} sm placeholder="Select fabric…" /></td>
+                      <td className="px-3 py-1.5"><Select value={row.hot_folder} onChange={(v) => updateHotFolder(row.id, { hot_folder: v })} options={HOT_FOLDERS} sm placeholder="Select hot folder…" /></td>
+                      <td className="px-3 py-1.5"><RemoveBtn onClick={() => removeHotFolder(row.id)} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      </Card>
+
+      {/* SECTION 6 — Fulfillment + Production Defaults side-by-side */}
+      <div className="grid grid-cols-2 gap-5 mb-5">
+        <Card>
+          <CardHeader title="6 · Fulfillment Model" />
+          <div className="p-5 space-y-3">
+            <FormField label="Fulfillment mode" required>
+              <Select value={form.fulfillment_mode} onChange={(v) => update('fulfillment_mode', v)} options={FULFILLMENT_MODES} placeholder="Select fulfillment mode…" />
+            </FormField>
+            <FormField label="Label mode" hint="Determines how shipping labels are generated for this customer">
+              <Select value={form.label_mode} onChange={(v) => update('label_mode', v)} options={LABEL_MODES} placeholder="Select label mode…" />
+            </FormField>
+            <FormField label="Preferred carrier">
+              <Select value={form.preferred_carrier} onChange={(v) => update('preferred_carrier', v)} options={CARRIERS} placeholder="Select carrier…" />
+            </FormField>
+            <FormField label="Blind ship default">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={form.blind_ship_default} onChange={(e) => update('blind_ship_default', e.target.checked)} className="w-4 h-4" />
+                Blind ship (no ADT branding on outer package)
+              </label>
+            </FormField>
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader title="7 · Production Defaults" />
+          <div className="p-5 space-y-3">
+            <FormField label="Default Print Profile">
+              <Select value={form.default_print_profile} onChange={(v) => update('default_print_profile', v)} options={PRINT_PROFILES} placeholder="Select default print profile…" />
+            </FormField>
+            <FormField label="Strike-off rule">
+              <Select value={form.strikeoff_rule} onChange={(v) => update('strikeoff_rule', v)} options={STRIKEOFF_RULES} placeholder="Select strike-off rule…" />
+            </FormField>
+            <FormField label="Strike-off approval path">
+              <Select value={form.strikeoff_approval} onChange={(v) => update('strikeoff_approval', v)} options={STRIKEOFF_APPROVAL} placeholder="Select approval path…" />
+            </FormField>
+            <FormField label="Default Colorist">
+              <Select value={form.default_colorist} onChange={(v) => update('default_colorist', v)} options={COLORISTS} placeholder="Select default colorist…" />
+            </FormField>
           </div>
         </Card>
       </div>
 
-      {/* SECTION 6 & 7: Shipping + Billing side-by-side */}
-      <div className="grid grid-cols-2 gap-6">
-        <Card>
-          <CardHeader title="6 · Shipping Rules" />
-          <div className="p-5 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-            <KV label="Preferred carrier"   value={cfg.shipping.preferred_carrier} />
-            <KV label="Service level"       value={cfg.shipping.service_level} />
-            <KV label="Blind ship default"  value={cfg.shipping.blind_ship_default ? 'Yes' : 'No'} />
-            <KV label="3rd-party billed"    value={cfg.shipping.third_party_billed ? 'Yes' : 'No'} />
-            {cfg.shipping.carrier_account && (
-              <KV label="Carrier account" value={`${cfg.shipping.carrier_account.carrier} #${cfg.shipping.carrier_account.masked_account}`} mono colSpan />
-            )}
-          </div>
-        </Card>
-        <Card>
-          <CardHeader title="7 · Billing Rules" subtitle="Helm flags + thresholds · dollar values live in QuickBooks" />
-          <div className="p-5 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-            <KV label="Credit hold"            value={cfg.billing.credit_hold ? 'Yes' : 'No'} />
-            <KV label="Payment terms"          value={cfg.billing.payment_terms} />
-            <KV label="Overage policy"         value={cfg.billing.overage_policy} />
-            <KV label="Overage tolerance"      value={`${cfg.billing.overage_tolerance_pct}%`} />
-            <KV label="Pricing variance"       value={cfg.billing.pricing_variance_threshold} colSpan />
-            <KV label="PO required"            value={cfg.billing.po_required ? 'Yes' : 'No'} />
-            <KV label="Invoice routing"        value={cfg.billing.invoice_routing} />
-          </div>
-        </Card>
-      </div>
-
-      {/* SECTION 8: Production Requirements */}
-      <Card>
-        <CardHeader title="8 · Customer-Specific Production Requirements" />
-        <div className="p-5 space-y-2 text-sm">
-          {cfg.production_requirements.map((p, i) => (
-            <div key={i} className="grid grid-cols-4 gap-2">
-              <div className="text-xs uppercase tracking-wider text-gray-500">{p.kind}</div>
-              <div className="col-span-3">{p.value}</div>
+      {/* SECTION 8 — Test */}
+      <Card className="mb-5">
+        <CardHeader title="8 · Test & Validate" subtitle="Upload a sample file · Helm parses it against the mappings above and shows what records would be created · NO records are actually saved" />
+        <div className="p-5 grid grid-cols-2 gap-6">
+          <div>
+            <div className="text-xs uppercase tracking-wider font-semibold text-gray-700 mb-2">Sample file</div>
+            <div className="border-2 border-dashed border-gray-300 rounded p-6 text-center">
+              <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+              <div className="text-sm text-gray-600">Drop a CSV / XML sample here, or</div>
+              <Button variant="secondary" size="sm" className="mt-2">Browse files</Button>
             </div>
-          ))}
+            <div className="mt-3 flex gap-2">
+              <Button variant="secondary" size="sm"><FileCheck className="w-3.5 h-3.5 mr-1" />Validate mappings</Button>
+              <Button size="sm">Test Parse</Button>
+            </div>
+          </div>
+          <div>
+            <div className="text-xs uppercase tracking-wider font-semibold text-gray-700 mb-2">Test result</div>
+            <div className="border border-gray-200 rounded p-4 text-xs text-gray-400 italic min-h-[140px]">
+              Upload a sample file and click "Test Parse" to see how Helm would interpret each row, what records it would create, and which rows would fail validation.
+            </div>
+          </div>
         </div>
       </Card>
 
-      {/* SECTION 9: Credentials */}
-      <Card>
-        <CardHeader title="9 · Credentials & Integrations" subtitle="Stored encrypted · accessed only via service · displayed masked for review" />
-        <div className="p-5 space-y-2 text-sm">
-          {cfg.credentials.map((c, i) => (
-            <div key={i} className="grid grid-cols-4 gap-2">
-              <div className="text-xs uppercase tracking-wider text-gray-500">{c.kind}</div>
-              <div className="col-span-3 font-mono text-xs">{c.value}</div>
-            </div>
-          ))}
+      {/* Sticky action bar */}
+      <div className="fixed bottom-0 left-60 right-0 bg-white border-t border-gray-200 px-6 py-3 flex items-center justify-between shadow-lg">
+        <div className="text-xs text-gray-500">
+          {isNew
+            ? <span><strong>New customer config</strong> · unsaved</span>
+            : <span>Editing <strong>{form.customer_name}</strong> · status <Tag color={form.status === 'Active' ? 'green' : form.status === 'Draft' ? 'yellow' : 'gray'}>{form.status}</Tag></span>
+          }
         </div>
-      </Card>
-
-      <div className="px-4 py-3 bg-navy-50 border-l-4 border-navy-500 text-xs text-gray-700 rounded-r">
-        <strong className="text-navy-900">Prototype note.</strong> Each customer config above is mock data structured to demonstrate the C2 Customer Profile shape and how it drives C9 (Design File Routing + Hot Folder + Strike-Off Initiation) and C10 (CSV/XML Intake) downstream. In production the configs would be admin-editable via Settings; today they are read-only here. The page exists so Ali (and Nick) can verify Helm's understanding of each customer's setup at a glance.
+        <div className="flex gap-2">
+          <Button variant="ghost">Cancel</Button>
+          <Button variant="secondary">Save Draft</Button>
+          <Button>{isNew ? 'Create & Activate' : 'Save & Activate'}</Button>
+        </div>
       </div>
     </div>
   );
 }
 
-function KV({ label, value, mono, colSpan }: { label: string; value: string; mono?: boolean; colSpan?: boolean }) {
+// =====================================================================
+// Form bits
+// =====================================================================
+
+function FormField({ label, hint, required, className, children }: { label: string; hint?: string; required?: boolean; className?: string; children: React.ReactNode }) {
   return (
-    <div className={colSpan ? 'col-span-2' : ''}>
-      <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">{label}</div>
-      <div className={`text-sm mt-0.5 ${mono ? 'font-mono text-xs' : ''}`}>{value}</div>
+    <div className={className}>
+      <label className="block text-xs font-semibold text-gray-700 mb-1">
+        {label}{required && <span className="text-red-600 ml-0.5">*</span>}
+      </label>
+      {hint && <div className="text-[10px] text-gray-500 mb-1 italic">{hint}</div>}
+      {children}
     </div>
+  );
+}
+
+function Input({ value, onChange, placeholder, mono, sm }: { value: string; onChange: (v: string) => void; placeholder?: string; mono?: boolean; sm?: boolean }) {
+  return (
+    <input
+      type="text"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className={`w-full border border-gray-300 rounded ${sm ? 'px-2 py-1 text-xs' : 'px-2.5 py-1.5 text-sm'} ${mono ? 'font-mono' : ''}`}
+    />
+  );
+}
+
+function Select({ value, onChange, options, placeholder, sm }: { value: string; onChange: (v: string) => void; options: string[]; placeholder?: string; sm?: boolean }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={`w-full border border-gray-300 rounded bg-white ${sm ? 'px-2 py-1 text-xs' : 'px-2.5 py-1.5 text-sm'}`}
+    >
+      <option value="">{placeholder ?? 'Select…'}</option>
+      {options.map((o) => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+}
+
+function RemoveBtn({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      type="button"
+      title="Remove row"
+      className="w-6 h-6 rounded text-red-600 hover:bg-red-50 flex items-center justify-center"
+    >
+      <Trash2 className="w-3.5 h-3.5" />
+    </button>
   );
 }
