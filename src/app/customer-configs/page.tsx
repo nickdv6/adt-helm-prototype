@@ -97,6 +97,7 @@ const LABEL_MODES = [
   'Mode A — ADT logs into customer Shopify (stored credentials)',
   'Mode B — ADT prints via customer\'s carrier account',
   'Mode C — Customer supplies pre-paid label',
+  'Mode D — ADT ships to end consumer on client\'s behalf (ADT carrier account · blind-shipped · billed back to client)',
   'N/A (direct-to-customer)',
 ];
 const CARRIERS = ['UPS', 'FedEx', 'USPS', 'DHL', 'Customer-supplied label'];
@@ -112,7 +113,6 @@ const STRIKEOFF_APPROVAL = [
   'Customer-approved (tokenized email link · 30-day expiry)',
 ];
 const PRINT_PROFILES = ['Cotton Sateen 110-thread · Default', 'Cotton Sateen 90-thread · Default', 'Linen Blend Natural · Default', 'Velvet Cotton · Default', 'Customer-Supplied · per-PR'];
-const COLORISTS = ['Jeannine Rivera', 'Maya Chen', 'Auto-assign (round-robin)'];
 const FABRIC_OPTIONS = ['Cotton Sateen 110-thread', 'Cotton Sateen 90-thread', 'Linen Blend Natural', 'Velvet Cotton', 'Textured Linen', 'Performance Outdoor'];
 const HOT_FOLDERS = ['MS JP4 hot folder', 'MS JP7 hot folder', 'Durst Alpha 330 hot folder', 'Zimmer Colaris hot folder', 'HP Latex 830W hot folder', 'HP Latex 800W hot folder'];
 
@@ -121,7 +121,18 @@ const HOT_FOLDERS = ['MS JP4 hot folder', 'MS JP7 hot folder', 'Durst Alpha 330 
 // =====================================================================
 
 type FieldMappingRow = { id: string; source_col: string; helm_field: string; required: boolean; default_value: string; transform: string; notes: string };
-type SKUMapRow = { id: string; customer_sku: string; adt_sku: string; design: string; colorway: string; fabric: string };
+type SKUMapRow = {
+  id: string;
+  customer_sku: string;
+  adt_sku: string;
+  design: string;
+  colorway: string;
+  fabric: string;
+  // Production rules — per SKU, not customer-wide (per Nick)
+  print_profile: string;
+  strikeoff_rule: string;
+  strikeoff_approval: string;
+};
 type ShipExportColumn = { id: string; export_col: string; helm_value: string };
 type HotFolderOverride = { id: string; fabric: string; hot_folder: string };
 
@@ -153,10 +164,6 @@ const empty = () => ({
   label_mode: '',
   blind_ship_default: false,
   preferred_carrier: '',
-  default_print_profile: '',
-  strikeoff_rule: '',
-  strikeoff_approval: '',
-  default_colorist: '',
 });
 
 const stfrankPreset = () => ({
@@ -184,9 +191,12 @@ const stfrankPreset = () => ({
     { id: 'fm10', source_col: 'notes',              helm_field: 'Order.notes',                      required: false, default_value: '', transform: 'none', notes: 'Free-text; not used for routing' },
   ],
   sku_mapping: [
-    { id: 's1', customer_sku: 'SF-CYP-Y15', adt_sku: 'CYP-IND-Yardage', design: 'Cypress',  colorway: 'Indigo', fabric: 'Cotton Sateen 110-thread' },
-    { id: 's2', customer_sku: 'SF-MAR-Y15', adt_sku: 'MAR-WHT-Yardage', design: 'Marigold', colorway: 'White',  fabric: 'Linen Blend Natural' },
-    { id: 's3', customer_sku: 'SF-COR-Y15', adt_sku: 'COR-PINK-Yardage', design: 'Coral',   colorway: 'Pink',   fabric: 'Cotton Sateen 90-thread' },
+    { id: 's1', customer_sku: 'SF-CYP-Y15', adt_sku: 'CYP-IND-Yardage',  design: 'Cypress',  colorway: 'Indigo', fabric: 'Cotton Sateen 110-thread',
+      print_profile: PRINT_PROFILES[0], strikeoff_rule: STRIKEOFF_RULES[1], strikeoff_approval: STRIKEOFF_APPROVAL[0] },
+    { id: 's2', customer_sku: 'SF-MAR-Y15', adt_sku: 'MAR-WHT-Yardage', design: 'Marigold', colorway: 'White',  fabric: 'Linen Blend Natural',
+      print_profile: PRINT_PROFILES[2], strikeoff_rule: STRIKEOFF_RULES[1], strikeoff_approval: STRIKEOFF_APPROVAL[0] },
+    { id: 's3', customer_sku: 'SF-COR-Y15', adt_sku: 'COR-PINK-Yardage', design: 'Coral',   colorway: 'Pink',   fabric: 'Cotton Sateen 90-thread',
+      print_profile: PRINT_PROFILES[1], strikeoff_rule: STRIKEOFF_RULES[2], strikeoff_approval: STRIKEOFF_APPROVAL[0] },
   ],
   ship_export_folder: '\\\\adt-nas\\shipping-exports\\stfrank\\outbound\\',
   ship_export_format: EXPORT_FORMATS[0],
@@ -211,13 +221,9 @@ const stfrankPreset = () => ({
     { id: 'ho1', fabric: 'Linen Blend Natural', hot_folder: HOT_FOLDERS[1] },
   ],
   fulfillment_mode: FULFILLMENT_MODES[0],
-  label_mode: LABEL_MODES[3],
+  label_mode: LABEL_MODES[4],   // 'N/A (direct-to-customer)' — note: shifted index after Mode D was inserted
   blind_ship_default: false,
   preferred_carrier: CARRIERS[1],
-  default_print_profile: PRINT_PROFILES[0],
-  strikeoff_rule: STRIKEOFF_RULES[1],
-  strikeoff_approval: STRIKEOFF_APPROVAL[0],
-  default_colorist: COLORISTS[0],
 });
 
 const insidePreset = () => ({
@@ -241,9 +247,12 @@ const insidePreset = () => ({
     { id: 'fm6', source_col: 'shipping_method',  helm_field: 'FR.notes',                  required: false, default_value: 'Standard', transform: 'none', notes: 'Mapped to carrier service downstream' },
   ],
   sku_mapping: [
-    { id: 's1', customer_sku: 'CYP-IND-PLW-18', adt_sku: 'PLW-CYP-18x18', design: 'Cypress',  colorway: 'Indigo', fabric: 'Cotton Sateen 110-thread' },
-    { id: 's2', customer_sku: 'CYP-IND-PLW-20', adt_sku: 'PLW-CYP-20x20', design: 'Cypress',  colorway: 'Indigo', fabric: 'Cotton Sateen 110-thread' },
-    { id: 's3', customer_sku: 'MAR-WHT-PLW-14', adt_sku: 'PLW-MAR-14x14', design: 'Marigold', colorway: 'White',  fabric: 'Linen Blend Natural' },
+    { id: 's1', customer_sku: 'CYP-IND-PLW-18', adt_sku: 'PLW-CYP-18x18', design: 'Cypress',  colorway: 'Indigo', fabric: 'Cotton Sateen 110-thread',
+      print_profile: PRINT_PROFILES[0], strikeoff_rule: STRIKEOFF_RULES[4], strikeoff_approval: 'N/A' },
+    { id: 's2', customer_sku: 'CYP-IND-PLW-20', adt_sku: 'PLW-CYP-20x20', design: 'Cypress',  colorway: 'Indigo', fabric: 'Cotton Sateen 110-thread',
+      print_profile: PRINT_PROFILES[0], strikeoff_rule: STRIKEOFF_RULES[4], strikeoff_approval: 'N/A' },
+    { id: 's3', customer_sku: 'MAR-WHT-PLW-14', adt_sku: 'PLW-MAR-14x14', design: 'Marigold', colorway: 'White',  fabric: 'Linen Blend Natural',
+      print_profile: PRINT_PROFILES[2], strikeoff_rule: STRIKEOFF_RULES[4], strikeoff_approval: 'N/A' },
   ],
   ship_export_folder: 'N/A (label printed via Shopify; no export file)',
   ship_export_format: EXPORT_FORMATS[2],
@@ -257,13 +266,9 @@ const insidePreset = () => ({
   default_hot_folder: 'N/A (pulled from stored inventory)',
   hot_folder_overrides: [],
   fulfillment_mode: FULFILLMENT_MODES[1],
-  label_mode: LABEL_MODES[0],
+  label_mode: LABEL_MODES[0],   // Mode A — ADT logs into customer Shopify
   blind_ship_default: true,
   preferred_carrier: CARRIERS[0],
-  default_print_profile: PRINT_PROFILES[0],
-  strikeoff_rule: STRIKEOFF_RULES[4],
-  strikeoff_approval: 'N/A',
-  default_colorist: COLORISTS[0],
 });
 
 function presetFor(slug: string) {
@@ -280,7 +285,14 @@ function presetFor(slug: string) {
                                       tags: 'csv, email, stored-inventory, label-mode-A, strike-off-always',
                                       intake_source: INTAKE_SOURCE_TYPES[1], source_path: 'orders@adt.example (sender contains "lemieuxetcie.example")',
                                       file_naming: 'lemieux_orders_{YYYYMMDD}.csv',
-                                      strikeoff_rule: STRIKEOFF_RULES[0], strikeoff_approval: STRIKEOFF_APPROVAL[1] };
+                                      // Lemieux requires always-required strike-off + customer email approval — applied per SKU
+                                      sku_mapping: [
+                                        { id: 'le1', customer_sku: 'TBL-TXT-72', adt_sku: 'TBL-TXT-72', design: 'Textured', colorway: 'Natural', fabric: 'Textured Linen',
+                                          print_profile: PRINT_PROFILES[0], strikeoff_rule: STRIKEOFF_RULES[0], strikeoff_approval: STRIKEOFF_APPROVAL[1] },
+                                        { id: 'le2', customer_sku: 'TBL-TXT-90', adt_sku: 'TBL-TXT-90', design: 'Textured', colorway: 'Natural', fabric: 'Textured Linen',
+                                          print_profile: PRINT_PROFILES[0], strikeoff_rule: STRIKEOFF_RULES[0], strikeoff_approval: STRIKEOFF_APPROVAL[1] },
+                                      ],
+                                    };
     default: return empty();
   }
 }
@@ -457,11 +469,11 @@ export default function CustomerConfigsAdmin() {
         </div>
       </Card>
 
-      {/* SECTION 4 — SKU Mapping */}
+      {/* SECTION 4 — SKU Mapping (with per-SKU production rules) */}
       <Card className="mb-5">
         <CardHeader
-          title="4 · SKU Mapping"
-          subtitle="Customer SKU → ADT SKU / Design / Colorway / Fabric"
+          title="4 · SKU Mapping + Per-SKU Production Rules"
+          subtitle="Customer SKU → ADT SKU / Design / Colorway / Fabric · plus Print Profile, Strike-Off Rule, and Strike-Off Approval per SKU (production rules can NOT be generalized at the customer level — each SKU defines its own)"
           action={
             <div className="flex gap-2">
               <Button variant="secondary" size="sm"><Upload className="w-3.5 h-3.5 mr-1" />Bulk Import</Button>
@@ -471,19 +483,27 @@ export default function CustomerConfigsAdmin() {
         />
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
-            <thead className="text-gray-500 uppercase tracking-wider border-b border-gray-200">
+            <thead className="text-gray-500 uppercase tracking-wider border-b border-gray-200 bg-gray-50">
+              <tr>
+                <th className="text-left px-3 py-2" colSpan={5}>Identity</th>
+                <th className="text-left px-3 py-2 border-l border-gray-300 bg-navy-50" colSpan={3}>Production Rules (per SKU)</th>
+                <th className="w-8"></th>
+              </tr>
               <tr>
                 <th className="text-left px-3 py-2">Customer SKU</th>
                 <th className="text-left px-3 py-2">ADT SKU</th>
                 <th className="text-left px-3 py-2">Design</th>
                 <th className="text-left px-3 py-2">Colorway</th>
                 <th className="text-left px-3 py-2">Fabric</th>
+                <th className="text-left px-3 py-2 border-l border-gray-300 bg-navy-50">Print Profile</th>
+                <th className="text-left px-3 py-2 bg-navy-50">Strike-Off Rule</th>
+                <th className="text-left px-3 py-2 bg-navy-50">Strike-Off Approval</th>
                 <th className="w-8"></th>
               </tr>
             </thead>
             <tbody>
               {form.sku_mapping.length === 0 && (
-                <tr><td colSpan={6} className="text-center py-6 text-sm text-gray-400 italic">No SKU mappings yet.</td></tr>
+                <tr><td colSpan={9} className="text-center py-6 text-sm text-gray-400 italic">No SKU mappings yet.</td></tr>
               )}
               {form.sku_mapping.map((row) => (
                 <tr key={row.id} className="border-t border-gray-100">
@@ -492,6 +512,15 @@ export default function CustomerConfigsAdmin() {
                   <td className="px-3 py-1.5"><Input value={row.design} onChange={(v) => updateSKUMap(row.id, { design: v })} sm /></td>
                   <td className="px-3 py-1.5"><Input value={row.colorway} onChange={(v) => updateSKUMap(row.id, { colorway: v })} sm /></td>
                   <td className="px-3 py-1.5"><Select value={row.fabric} onChange={(v) => updateSKUMap(row.id, { fabric: v })} options={FABRIC_OPTIONS} sm placeholder="Select fabric…" /></td>
+                  <td className="px-3 py-1.5 border-l border-gray-200 bg-navy-50/30">
+                    <Select value={row.print_profile} onChange={(v) => updateSKUMap(row.id, { print_profile: v })} options={PRINT_PROFILES} sm placeholder="Select profile…" />
+                  </td>
+                  <td className="px-3 py-1.5 bg-navy-50/30">
+                    <Select value={row.strikeoff_rule} onChange={(v) => updateSKUMap(row.id, { strikeoff_rule: v })} options={STRIKEOFF_RULES} sm placeholder="Select rule…" />
+                  </td>
+                  <td className="px-3 py-1.5 bg-navy-50/30">
+                    <Select value={row.strikeoff_approval} onChange={(v) => updateSKUMap(row.id, { strikeoff_approval: v })} options={['N/A', ...STRIKEOFF_APPROVAL]} sm placeholder="Select approval…" />
+                  </td>
                   <td className="px-3 py-1.5"><RemoveBtn onClick={() => removeSKUMap(row.id)} /></td>
                 </tr>
               ))}
@@ -617,46 +646,27 @@ export default function CustomerConfigsAdmin() {
       </Card>
 
       {/* SECTION 6 — Fulfillment + Production Defaults side-by-side */}
-      <div className="grid grid-cols-2 gap-5 mb-5">
-        <Card>
-          <CardHeader title="6 · Fulfillment Model" />
-          <div className="p-5 space-y-3">
-            <FormField label="Fulfillment mode" required>
-              <Select value={form.fulfillment_mode} onChange={(v) => update('fulfillment_mode', v)} options={FULFILLMENT_MODES} placeholder="Select fulfillment mode…" />
-            </FormField>
-            <FormField label="Label mode" hint="Determines how shipping labels are generated for this customer">
-              <Select value={form.label_mode} onChange={(v) => update('label_mode', v)} options={LABEL_MODES} placeholder="Select label mode…" />
-            </FormField>
-            <FormField label="Preferred carrier">
-              <Select value={form.preferred_carrier} onChange={(v) => update('preferred_carrier', v)} options={CARRIERS} placeholder="Select carrier…" />
-            </FormField>
-            <FormField label="Blind ship default">
-              <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={form.blind_ship_default} onChange={(e) => update('blind_ship_default', e.target.checked)} className="w-4 h-4" />
-                Blind ship (no ADT branding on outer package)
-              </label>
-            </FormField>
-          </div>
-        </Card>
-
-        <Card>
-          <CardHeader title="7 · Production Defaults" />
-          <div className="p-5 space-y-3">
-            <FormField label="Default Print Profile">
-              <Select value={form.default_print_profile} onChange={(v) => update('default_print_profile', v)} options={PRINT_PROFILES} placeholder="Select default print profile…" />
-            </FormField>
-            <FormField label="Strike-off rule">
-              <Select value={form.strikeoff_rule} onChange={(v) => update('strikeoff_rule', v)} options={STRIKEOFF_RULES} placeholder="Select strike-off rule…" />
-            </FormField>
-            <FormField label="Strike-off approval path">
-              <Select value={form.strikeoff_approval} onChange={(v) => update('strikeoff_approval', v)} options={STRIKEOFF_APPROVAL} placeholder="Select approval path…" />
-            </FormField>
-            <FormField label="Default Colorist">
-              <Select value={form.default_colorist} onChange={(v) => update('default_colorist', v)} options={COLORISTS} placeholder="Select default colorist…" />
-            </FormField>
-          </div>
-        </Card>
-      </div>
+      {/* SECTION 6 — Fulfillment Model (full-width; per-SKU production rules live in Section 4) */}
+      <Card className="mb-5">
+        <CardHeader title="6 · Fulfillment Model" subtitle="Customer-wide fulfillment + label generation rules" />
+        <div className="p-5 grid grid-cols-2 gap-x-6 gap-y-3">
+          <FormField label="Fulfillment mode" required>
+            <Select value={form.fulfillment_mode} onChange={(v) => update('fulfillment_mode', v)} options={FULFILLMENT_MODES} placeholder="Select fulfillment mode…" />
+          </FormField>
+          <FormField label="Preferred carrier">
+            <Select value={form.preferred_carrier} onChange={(v) => update('preferred_carrier', v)} options={CARRIERS} placeholder="Select carrier…" />
+          </FormField>
+          <FormField label="Label mode" required hint="How shipping labels are generated for this customer (4 modes + N/A)" className="col-span-2">
+            <Select value={form.label_mode} onChange={(v) => update('label_mode', v)} options={LABEL_MODES} placeholder="Select label mode…" />
+          </FormField>
+          <FormField label="Blind ship default" className="col-span-2">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={form.blind_ship_default} onChange={(e) => update('blind_ship_default', e.target.checked)} className="w-4 h-4" />
+              Blind ship (no ADT branding on outer package)
+            </label>
+          </FormField>
+        </div>
+      </Card>
 
       {/* SECTION 8 — Test */}
       <Card className="mb-5">
