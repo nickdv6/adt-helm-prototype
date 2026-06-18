@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Trash2, Upload, FileCheck, FolderInput, FolderOutput, Archive, KeyRound } from 'lucide-react';
+import { Plus, Trash2, Upload, Download, FileCheck, FolderInput, FolderOutput, Archive, KeyRound, Search, X, Pencil, Wand2 } from 'lucide-react';
 import { Card, CardHeader, Tag, Button } from '@/components/ui';
 
 // /customer-configs — Admin tool to set up a new CSV/XML customer's intake pipeline.
@@ -307,6 +307,12 @@ const nextId = () => `gen-${idCounter++}`;
 export default function CustomerConfigsAdmin() {
   const [activeSlug, setActiveSlug] = useState<string>('stfrank');
   const [form, setForm] = useState(() => presetFor('stfrank'));
+  // SKU mapping at scale: edit one-at-a-time via a side drawer; bulk via Import modal
+  const [editingSkuId, setEditingSkuId] = useState<string | null>(null);
+  const [showImport, setShowImport] = useState(false);
+  const [skuSearch, setSkuSearch] = useState('');
+  const [skuFilterFabric, setSkuFilterFabric] = useState('');
+  const [skuFilterStrikeoff, setSkuFilterStrikeoff] = useState('');
 
   const switchTo = (slug: string) => {
     setActiveSlug(slug);
@@ -322,7 +328,11 @@ export default function CustomerConfigsAdmin() {
   const updateFieldMapping = (id: string, patch: Partial<FieldMappingRow>) => setForm((f) => ({ ...f, field_mapping: f.field_mapping.map((r) => r.id === id ? { ...r, ...patch } : r) }));
 
   // SKU mapping row operations
-  const addSKUMap = () => setForm((f) => ({ ...f, sku_mapping: [...f.sku_mapping, { id: nextId(), customer_sku: '', adt_sku: '', design: '', colorway: '', fabric: '' }] }));
+  const addSKUMap = () => {
+    const newId = nextId();
+    setForm((f) => ({ ...f, sku_mapping: [...f.sku_mapping, { id: newId, customer_sku: '', adt_sku: '', design: '', colorway: '', fabric: '', print_profile: '', strikeoff_rule: '', strikeoff_approval: '' }] }));
+    return newId;
+  };
   const removeSKUMap = (id: string) => setForm((f) => ({ ...f, sku_mapping: f.sku_mapping.filter((r) => r.id !== id) }));
   const updateSKUMap = (id: string, patch: Partial<SKUMapRow>) => setForm((f) => ({ ...f, sku_mapping: f.sku_mapping.map((r) => r.id === id ? { ...r, ...patch } : r) }));
 
@@ -469,65 +479,21 @@ export default function CustomerConfigsAdmin() {
         </div>
       </Card>
 
-      {/* SECTION 4 — SKU Mapping (with per-SKU production rules) */}
-      <Card className="mb-5">
-        <CardHeader
-          title="4 · SKU Mapping + Per-SKU Production Rules"
-          subtitle="Customer SKU → ADT SKU / Design / Colorway / Fabric · plus Print Profile, Strike-Off Rule, and Strike-Off Approval per SKU (production rules can NOT be generalized at the customer level — each SKU defines its own)"
-          action={
-            <div className="flex gap-2">
-              <Button variant="secondary" size="sm"><Upload className="w-3.5 h-3.5 mr-1" />Bulk Import</Button>
-              <Button size="sm" onClick={addSKUMap}><Plus className="w-3.5 h-3.5 mr-1" />Add SKU</Button>
-            </div>
-          }
-        />
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead className="text-gray-500 uppercase tracking-wider border-b border-gray-200 bg-gray-50">
-              <tr>
-                <th className="text-left px-3 py-2" colSpan={5}>Identity</th>
-                <th className="text-left px-3 py-2 border-l border-gray-300 bg-navy-50" colSpan={3}>Production Rules (per SKU)</th>
-                <th className="w-8"></th>
-              </tr>
-              <tr>
-                <th className="text-left px-3 py-2">Customer SKU</th>
-                <th className="text-left px-3 py-2">ADT SKU</th>
-                <th className="text-left px-3 py-2">Design</th>
-                <th className="text-left px-3 py-2">Colorway</th>
-                <th className="text-left px-3 py-2">Fabric</th>
-                <th className="text-left px-3 py-2 border-l border-gray-300 bg-navy-50">Print Profile</th>
-                <th className="text-left px-3 py-2 bg-navy-50">Strike-Off Rule</th>
-                <th className="text-left px-3 py-2 bg-navy-50">Strike-Off Approval</th>
-                <th className="w-8"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {form.sku_mapping.length === 0 && (
-                <tr><td colSpan={9} className="text-center py-6 text-sm text-gray-400 italic">No SKU mappings yet.</td></tr>
-              )}
-              {form.sku_mapping.map((row) => (
-                <tr key={row.id} className="border-t border-gray-100">
-                  <td className="px-3 py-1.5"><Input value={row.customer_sku} onChange={(v) => updateSKUMap(row.id, { customer_sku: v })} mono sm /></td>
-                  <td className="px-3 py-1.5"><Input value={row.adt_sku} onChange={(v) => updateSKUMap(row.id, { adt_sku: v })} mono sm /></td>
-                  <td className="px-3 py-1.5"><Input value={row.design} onChange={(v) => updateSKUMap(row.id, { design: v })} sm /></td>
-                  <td className="px-3 py-1.5"><Input value={row.colorway} onChange={(v) => updateSKUMap(row.id, { colorway: v })} sm /></td>
-                  <td className="px-3 py-1.5"><Select value={row.fabric} onChange={(v) => updateSKUMap(row.id, { fabric: v })} options={FABRIC_OPTIONS} sm placeholder="Select fabric…" /></td>
-                  <td className="px-3 py-1.5 border-l border-gray-200 bg-navy-50/30">
-                    <Select value={row.print_profile} onChange={(v) => updateSKUMap(row.id, { print_profile: v })} options={PRINT_PROFILES} sm placeholder="Select profile…" />
-                  </td>
-                  <td className="px-3 py-1.5 bg-navy-50/30">
-                    <Select value={row.strikeoff_rule} onChange={(v) => updateSKUMap(row.id, { strikeoff_rule: v })} options={STRIKEOFF_RULES} sm placeholder="Select rule…" />
-                  </td>
-                  <td className="px-3 py-1.5 bg-navy-50/30">
-                    <Select value={row.strikeoff_approval} onChange={(v) => updateSKUMap(row.id, { strikeoff_approval: v })} options={['N/A', ...STRIKEOFF_APPROVAL]} sm placeholder="Select approval…" />
-                  </td>
-                  <td className="px-3 py-1.5"><RemoveBtn onClick={() => removeSKUMap(row.id)} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      {/* SECTION 4 — SKU Mapping (scale-aware: import-driven + searchable + edit-one-at-a-time) */}
+      <SKUMappingSection
+        rows={form.sku_mapping}
+        skuSearch={skuSearch}
+        setSkuSearch={setSkuSearch}
+        skuFilterFabric={skuFilterFabric}
+        setSkuFilterFabric={setSkuFilterFabric}
+        skuFilterStrikeoff={skuFilterStrikeoff}
+        setSkuFilterStrikeoff={setSkuFilterStrikeoff}
+        onImport={() => setShowImport(true)}
+        onAddSingle={() => setEditingSkuId(addSKUMap())}
+        onEdit={(id) => setEditingSkuId(id)}
+        // Realistic scale number for the prototype — emphasizes thousands-of-SKUs reality
+        totalSkusForCustomer={form.customer_name === 'St. Frank' ? 4283 : form.customer_name === 'Inside / Havenly' ? 12847 : form.customer_name === 'Laura Park Designs' ? 6921 : form.customer_name === 'House of MBR' ? 1847 : form.customer_name === 'Lemieux Et Cie' ? 312 : 0}
+      />
 
       {/* SECTION 5 — Output Destinations */}
       <Card className="mb-5 border-navy-500 border-2">
@@ -705,6 +671,317 @@ export default function CustomerConfigsAdmin() {
           <Button variant="ghost">Cancel</Button>
           <Button variant="secondary">Save Draft</Button>
           <Button>{isNew ? 'Create & Activate' : 'Save & Activate'}</Button>
+        </div>
+      </div>
+
+      {/* SKU edit drawer */}
+      {editingSkuId && (
+        <SKUEditDrawer
+          row={form.sku_mapping.find((s) => s.id === editingSkuId)!}
+          onChange={(patch) => updateSKUMap(editingSkuId, patch)}
+          onDelete={() => { removeSKUMap(editingSkuId); setEditingSkuId(null); }}
+          onClose={() => setEditingSkuId(null)}
+        />
+      )}
+
+      {/* Bulk import modal */}
+      {showImport && <ImportDialog customer={form.customer_name || 'this customer'} onClose={() => setShowImport(false)} />}
+    </div>
+  );
+}
+
+// =====================================================================
+// SKU Mapping section (scale-aware) — browse / search / filter / edit one
+// =====================================================================
+
+function SKUMappingSection({
+  rows, skuSearch, setSkuSearch, skuFilterFabric, setSkuFilterFabric, skuFilterStrikeoff, setSkuFilterStrikeoff,
+  onImport, onAddSingle, onEdit, totalSkusForCustomer,
+}: {
+  rows: SKUMapRow[];
+  skuSearch: string; setSkuSearch: (s: string) => void;
+  skuFilterFabric: string; setSkuFilterFabric: (s: string) => void;
+  skuFilterStrikeoff: string; setSkuFilterStrikeoff: (s: string) => void;
+  onImport: () => void;
+  onAddSingle: () => void;
+  onEdit: (id: string) => void;
+  totalSkusForCustomer: number;
+}) {
+  // Apply visible-row filters (search + fabric + strike-off)
+  const filtered = rows.filter((r) => {
+    if (skuSearch && !`${r.customer_sku} ${r.adt_sku} ${r.design}`.toLowerCase().includes(skuSearch.toLowerCase())) return false;
+    if (skuFilterFabric && r.fabric !== skuFilterFabric) return false;
+    if (skuFilterStrikeoff && r.strikeoff_rule !== skuFilterStrikeoff) return false;
+    return true;
+  });
+
+  return (
+    <Card className="mb-5">
+      <CardHeader
+        title="4 · SKU Mapping + Per-SKU Production Rules"
+        subtitle="Customer SKU → ADT SKU / Design / Colorway / Fabric · plus Print Profile, Strike-Off Rule, and Strike-Off Approval per SKU · designed for scale (thousands of SKUs per customer)"
+        action={
+          <div className="flex gap-2">
+            <Button onClick={onImport} size="sm"><Upload className="w-3.5 h-3.5 mr-1" />Import CSV / Excel</Button>
+            <Button variant="secondary" size="sm"><Download className="w-3.5 h-3.5 mr-1" />Export</Button>
+            <Button variant="secondary" size="sm" onClick={onAddSingle}><Plus className="w-3.5 h-3.5 mr-1" />Add Single SKU</Button>
+            <Button variant="secondary" size="sm"><Wand2 className="w-3.5 h-3.5 mr-1" />Bulk Apply Rule…</Button>
+          </div>
+        }
+      />
+
+      {/* Summary bar */}
+      <div className="px-5 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center justify-between text-xs">
+        <div className="text-gray-700">
+          <strong className="font-mono">{totalSkusForCustomer.toLocaleString()}</strong> active SKU mappings ·
+          <span className="ml-2">Last bulk import: 2 days ago by <strong>Megan B.</strong> (added 195, updated 47, 0 errors)</span>
+        </div>
+        <div className="text-gray-500">
+          <span className="text-green-700 font-semibold">0 errors</span> · 0 unresolved fabrics · 0 duplicate Customer SKUs
+        </div>
+      </div>
+
+      {/* Search + filter bar */}
+      <div className="px-5 py-3 flex items-center gap-2 border-b border-gray-200">
+        <div className="flex-1 relative">
+          <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-gray-400" />
+          <input
+            type="text"
+            value={skuSearch}
+            onChange={(e) => setSkuSearch(e.target.value)}
+            placeholder="Search by Customer SKU, ADT SKU, or Design…"
+            className="w-full pl-8 pr-3 py-1.5 border border-gray-300 rounded text-sm"
+          />
+        </div>
+        <select
+          value={skuFilterFabric}
+          onChange={(e) => setSkuFilterFabric(e.target.value)}
+          className="border border-gray-300 rounded px-2 py-1.5 text-sm bg-white"
+        >
+          <option value="">All fabrics</option>
+          {FABRIC_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+        </select>
+        <select
+          value={skuFilterStrikeoff}
+          onChange={(e) => setSkuFilterStrikeoff(e.target.value)}
+          className="border border-gray-300 rounded px-2 py-1.5 text-sm bg-white"
+        >
+          <option value="">All strike-off rules</option>
+          {STRIKEOFF_RULES.map((o) => <option key={o} value={o}>{o.split(' — ')[0]}</option>)}
+        </select>
+      </div>
+
+      {/* Compact read-only table */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead className="text-gray-500 uppercase tracking-wider border-b border-gray-200 bg-gray-50">
+            <tr>
+              <th className="text-left px-3 py-2">Customer SKU</th>
+              <th className="text-left px-3 py-2">ADT SKU</th>
+              <th className="text-left px-3 py-2">Design</th>
+              <th className="text-left px-3 py-2">Colorway</th>
+              <th className="text-left px-3 py-2">Fabric</th>
+              <th className="text-left px-3 py-2 bg-navy-50">Print Profile</th>
+              <th className="text-left px-3 py-2 bg-navy-50">Strike-Off</th>
+              <th className="text-right px-3 py-2 pr-5">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 && (
+              <tr><td colSpan={8} className="text-center py-8 text-sm text-gray-400 italic">No SKU mappings match these filters. Try Import to bring in a full mapping.</td></tr>
+            )}
+            {filtered.map((row) => {
+              const strikeShort = row.strikeoff_rule.split(' — ')[0] || row.strikeoff_rule || '—';
+              const profileShort = row.print_profile.split(' · ')[0] || row.print_profile || '—';
+              return (
+                <tr key={row.id} className="border-t border-gray-100 hover:bg-gray-50">
+                  <td className="px-3 py-1.5 font-mono">{row.customer_sku || <span className="text-gray-400 italic">(new)</span>}</td>
+                  <td className="px-3 py-1.5 font-mono text-navy-700">{row.adt_sku || <span className="text-gray-400 italic">—</span>}</td>
+                  <td className="px-3 py-1.5">{row.design || <span className="text-gray-400 italic">—</span>}</td>
+                  <td className="px-3 py-1.5">{row.colorway || <span className="text-gray-400 italic">—</span>}</td>
+                  <td className="px-3 py-1.5">{row.fabric || <span className="text-gray-400 italic">—</span>}</td>
+                  <td className="px-3 py-1.5 bg-navy-50/30 text-[11px]">{profileShort}</td>
+                  <td className="px-3 py-1.5 bg-navy-50/30">
+                    <Tag color={strikeShort === 'Always' ? 'red' : strikeShort === 'Never' ? 'gray' : strikeShort.startsWith('First-run') ? 'yellow' : strikeShort.startsWith('New') ? 'blue' : 'gray'}>{strikeShort}</Tag>
+                  </td>
+                  <td className="px-3 py-1.5 text-right pr-5">
+                    <button onClick={() => onEdit(row.id)} className="text-navy-700 hover:underline text-xs font-semibold inline-flex items-center gap-1">
+                      <Pencil className="w-3 h-3" /> Edit
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination footer */}
+      <div className="px-5 py-2.5 border-t border-gray-200 flex items-center justify-between text-xs text-gray-600">
+        <div>Showing <strong>{filtered.length}</strong> of <strong className="font-mono">{totalSkusForCustomer.toLocaleString()}</strong> mappings {(skuSearch || skuFilterFabric || skuFilterStrikeoff) && <span className="text-gray-500 italic ml-1">(filtered view)</span>}</div>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" disabled>← Previous</Button>
+          <span className="px-2">Page 1 of {Math.max(1, Math.ceil(totalSkusForCustomer / 50)).toLocaleString()}</span>
+          <Button variant="secondary" size="sm">Next →</Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+// =====================================================================
+// SKU edit drawer — focused edit of one SKU
+// =====================================================================
+
+function SKUEditDrawer({
+  row, onChange, onDelete, onClose,
+}: {
+  row: SKUMapRow;
+  onChange: (patch: Partial<SKUMapRow>) => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-40 flex">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/30" onClick={onClose}></div>
+      {/* Drawer */}
+      <div className="ml-auto relative w-[480px] bg-white shadow-2xl h-full flex flex-col">
+        <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+          <div>
+            <div className="text-xs uppercase tracking-wider text-gray-500">Edit SKU mapping</div>
+            <div className="font-mono text-sm font-semibold mt-0.5">{row.customer_sku || 'New SKU'}</div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+          <div>
+            <div className="text-xs uppercase tracking-wider text-gray-500 font-semibold mb-2">Identity</div>
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="Customer SKU" required>
+                <Input value={row.customer_sku} onChange={(v) => onChange({ customer_sku: v })} mono />
+              </FormField>
+              <FormField label="ADT SKU" required>
+                <Input value={row.adt_sku} onChange={(v) => onChange({ adt_sku: v })} mono />
+              </FormField>
+              <FormField label="Design">
+                <Input value={row.design} onChange={(v) => onChange({ design: v })} />
+              </FormField>
+              <FormField label="Colorway">
+                <Input value={row.colorway} onChange={(v) => onChange({ colorway: v })} />
+              </FormField>
+              <FormField label="Fabric" required className="col-span-2">
+                <Select value={row.fabric} onChange={(v) => onChange({ fabric: v })} options={FABRIC_OPTIONS} placeholder="Select fabric…" />
+              </FormField>
+            </div>
+          </div>
+
+          <div className="border-t border-gray-200 pt-4">
+            <div className="text-xs uppercase tracking-wider text-navy-700 font-semibold mb-2">Production Rules (per SKU)</div>
+            <div className="space-y-3">
+              <FormField label="Print Profile" required>
+                <Select value={row.print_profile} onChange={(v) => onChange({ print_profile: v })} options={PRINT_PROFILES} placeholder="Select profile…" />
+              </FormField>
+              <FormField label="Strike-Off Rule" required>
+                <Select value={row.strikeoff_rule} onChange={(v) => onChange({ strikeoff_rule: v })} options={STRIKEOFF_RULES} placeholder="Select rule…" />
+              </FormField>
+              <FormField label="Strike-Off Approval" required>
+                <Select value={row.strikeoff_approval} onChange={(v) => onChange({ strikeoff_approval: v })} options={['N/A', ...STRIKEOFF_APPROVAL]} placeholder="Select approval…" />
+              </FormField>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-5 py-3 border-t border-gray-200 flex items-center justify-between">
+          <Button variant="ghost" onClick={onDelete}>
+            <Trash2 className="w-3.5 h-3.5 mr-1 text-red-600" />
+            <span className="text-red-600">Delete SKU</span>
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button onClick={onClose}>Save</Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// =====================================================================
+// Bulk import dialog — demonstrates the import preview / validate / commit flow
+// =====================================================================
+
+function ImportDialog({ customer, onClose }: { customer: string; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center p-6">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose}></div>
+      <div className="relative bg-white rounded shadow-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+        <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+          <div>
+            <div className="text-base font-bold text-navy-900">Import SKU Mappings — {customer}</div>
+            <div className="text-xs text-gray-500 mt-0.5">CSV or Excel · expected columns: customer_sku · adt_sku · design · colorway · fabric · print_profile · strikeoff_rule · strikeoff_approval</div>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X className="w-5 h-5" /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          {/* Step 1: Upload */}
+          <div>
+            <div className="text-xs uppercase tracking-wider font-semibold text-gray-700 mb-2">Step 1 · Upload file</div>
+            <div className="border-2 border-dashed border-gray-300 rounded p-6 text-center">
+              <Upload className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+              <div className="text-sm text-gray-600 mb-2">Drag a CSV / Excel file here</div>
+              <Button variant="secondary" size="sm">Browse files</Button>
+              <div className="text-[11px] text-gray-500 mt-2">
+                <a className="text-navy-700 hover:underline">Download template</a> · <a className="text-navy-700 hover:underline">Export current mapping as starting point</a>
+              </div>
+            </div>
+          </div>
+
+          {/* Step 2: Map columns */}
+          <div>
+            <div className="text-xs uppercase tracking-wider font-semibold text-gray-700 mb-2">Step 2 · Confirm column mapping</div>
+            <table className="w-full text-xs border border-gray-200 rounded">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-left px-3 py-1.5">File column</th>
+                  <th className="text-left px-3 py-1.5">→ SKU field</th>
+                  <th className="text-center px-3 py-1.5 w-20">Required</th>
+                </tr>
+              </thead>
+              <tbody className="text-gray-500 italic">
+                <tr><td colSpan={3} className="text-center py-3">Column mapping will populate after a file is uploaded.</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Step 3: Validate */}
+          <div>
+            <div className="text-xs uppercase tracking-wider font-semibold text-gray-700 mb-2">Step 3 · Validate</div>
+            <div className="text-xs text-gray-600 italic">After upload, Helm validates every row against the customer's allowed fabrics, design library, and existing SKU rules. Rows with errors are listed here so admin can fix and re-upload.</div>
+            <div className="mt-3 grid grid-cols-4 gap-3 text-xs">
+              <div className="border border-gray-200 rounded p-3"><div className="text-gray-500">Rows parsed</div><div className="font-mono text-lg">—</div></div>
+              <div className="border border-green-300 bg-green-50 rounded p-3"><div className="text-green-700">Will add</div><div className="font-mono text-lg">—</div></div>
+              <div className="border border-yellow-300 bg-yellow-50 rounded p-3"><div className="text-yellow-700">Will update</div><div className="font-mono text-lg">—</div></div>
+              <div className="border border-red-300 bg-red-50 rounded p-3"><div className="text-red-700">Errors</div><div className="font-mono text-lg">—</div></div>
+            </div>
+          </div>
+
+          {/* Step 4: Commit */}
+          <div>
+            <div className="text-xs uppercase tracking-wider font-semibold text-gray-700 mb-2">Step 4 · Commit import</div>
+            <div className="text-xs text-gray-600 italic">No data is changed until you click "Commit Import" below. Helm writes an audit event recording the file, the admin, the row counts, and a snapshot of the prior state (so the import can be reverted from System Admin if needed).</div>
+          </div>
+        </div>
+
+        <div className="px-5 py-3 border-t border-gray-200 flex items-center justify-between">
+          <span className="text-xs text-gray-500 italic">No file uploaded yet</span>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button variant="secondary" disabled>Validate</Button>
+            <Button disabled>Commit Import</Button>
+          </div>
         </div>
       </div>
     </div>
