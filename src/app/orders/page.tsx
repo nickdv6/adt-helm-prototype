@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { getDb } from '@/lib/db';
 import { Card, CardHeader, StatusPill, Button, Tag } from '@/components/ui';
-import { formatDate, formatCurrency, relativeTime } from '@/lib/utils';
+import { formatDate, relativeTime } from '@/lib/utils';
 import { OrderRow } from '@/components/order-row';
 
 // S20 Order Dashboard
@@ -95,13 +95,12 @@ export default function OrderDashboard({ searchParams }: { searchParams: { filte
               <th className="text-left px-3 py-2.5">Roadmap</th>
               <th className="text-left px-3 py-2.5">Status</th>
               <th className="text-left px-3 py-2.5">Promised</th>
-              <th className="text-right px-3 py-2.5">Value</th>
               <th className="text-right px-3 py-2.5">Last Activity</th>
             </tr>
           </thead>
           <tbody>
             {orders.length === 0 && (
-              <tr><td colSpan={9} className="text-center py-12 text-gray-400">No orders match this filter.</td></tr>
+              <tr><td colSpan={8} className="text-center py-12 text-gray-400">No orders match this filter.</td></tr>
             )}
             {orders.map((o) => (
               <OrderRow key={o.id} order={o} prs={prsByOrder.get(o.id) || []} />

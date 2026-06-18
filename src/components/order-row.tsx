@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { StatusPill, Tag } from './ui';
-import { formatDate, formatCurrency, relativeTime } from '@/lib/utils';
+import { formatDate, relativeTime } from '@/lib/utils';
 
 export function OrderRow({ order, prs }: { order: any; prs: any[] }) {
   const [expanded, setExpanded] = useState(false);
@@ -34,12 +34,11 @@ export function OrderRow({ order, prs }: { order: any; prs: any[] }) {
         </td>
         <td className="px-3 py-2.5"><StatusPill status={order.status} /></td>
         <td className="px-3 py-2.5 text-xs">{formatDate(order.adt_promised_date)}</td>
-        <td className="px-3 py-2.5 text-right font-mono">{formatCurrency(order.subtotal)}</td>
         <td className="px-3 py-2.5 text-right text-xs text-gray-500">{relativeTime(order.created_at)}</td>
       </tr>
       {expanded && prs.length > 0 && (
         <tr className="bg-gray-50">
-          <td colSpan={9} className="px-3 py-2 pl-12">
+          <td colSpan={8} className="px-3 py-2 pl-12">
             <div className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 mb-1.5">
               Child Print Requests ({prs.length})
             </div>
