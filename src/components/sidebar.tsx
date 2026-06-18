@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Home, FileText, Layers, Truck, Package, Palette, Printer, Scissors, Settings, Users, Inbox } from 'lucide-react';
+import { Home, FileText, Layers, Truck, Package, Palette, Printer, Scissors, Settings, Users, Inbox, AlertTriangle, Boxes, Flame } from 'lucide-react';
 
 export function Sidebar() {
   return (
@@ -21,11 +21,16 @@ export function Sidebar() {
         <Section label="Production" />
         <NavItem href="/colorist" icon={<Palette className="w-4 h-4" />} label="Colorist Home" />
         <NavItem href="/printer-queue" icon={<Printer className="w-4 h-4" />} label="Printer Queue" />
+        <NavItem href="/batch-ticket" icon={<Flame className="w-4 h-4" />} label="Batch Ticket · Heat Press" />
         <NavItem href="/cut-sew" icon={<Scissors className="w-4 h-4" />} label="Cut/Sew Queue" />
 
         <Section label="Fulfillment" />
         <NavItem href="/shipping" icon={<Truck className="w-4 h-4" />} label="Shipping" />
+        <NavItem href="/fulfillment-requests" icon={<Boxes className="w-4 h-4" />} label="Fulfillment Requests" />
         <NavItem href="/inventory" icon={<Package className="w-4 h-4" />} label="Inventory" />
+
+        <Section label="Operations" />
+        <NavItem href="/exceptions" icon={<AlertTriangle className="w-4 h-4" />} label="Exception Center" badge="6" />
 
         <Section label="Admin" />
         <NavItem href="/customers" icon={<Users className="w-4 h-4" />} label="Customers" />
