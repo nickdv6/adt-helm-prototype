@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getDb } from '@/lib/db';
 import { Card, CardHeader, Tag, StatusPill, Button } from '@/components/ui';
-import { formatDate, formatCurrency, relativeTime } from '@/lib/utils';
+import { formatDate, relativeTime } from '@/lib/utils';
 
 // /customers/[id] — Customer 360
 // Surfaces: company info, contacts, ship-to addresses, recent orders, packaging profiles for this customer,
@@ -17,7 +17,7 @@ export default function CustomerDetail({ params }: { params: { id: string } }) {
   const contacts = db.prepare('SELECT * FROM contacts WHERE company_id = ? ORDER BY is_primary DESC').all(id) as any[];
   const addresses = db.prepare('SELECT * FROM ship_to_addresses WHERE company_id = ? ORDER BY is_default DESC').all(id) as any[];
   const orders = db.prepare(`
-    SELECT id, order_number, status, adt_promised_date, subtotal, is_rush
+    SELECT id, order_number, status, adt_promised_date, is_rush
     FROM orders WHERE company_id = ? ORDER BY created_at DESC LIMIT 15
   `).all(id) as any[];
   const profiles = db.prepare('SELECT id, name, product_type, packaging_type, is_default_for_combo FROM packaging_profiles WHERE company_id = ? ORDER BY product_type').all(id) as any[];
@@ -60,12 +60,11 @@ export default function CustomerDetail({ params }: { params: { id: string } }) {
                 <tr>
                   <th className="text-left px-4 py-2">Order #</th>
                   <th className="text-left px-4 py-2">Status</th>
-                  <th className="text-left px-4 py-2">Promised</th>
-                  <th className="text-right px-4 py-2 pr-5">Value</th>
+                  <th className="text-left px-4 py-2 pr-5">Promised</th>
                 </tr>
               </thead>
               <tbody>
-                {orders.length === 0 && <tr><td colSpan={4} className="px-4 py-6 text-center text-gray-400">No orders.</td></tr>}
+                {orders.length === 0 && <tr><td colSpan={3} className="px-4 py-6 text-center text-gray-400">No orders.</td></tr>}
                 {orders.map((o) => (
                   <tr key={o.id} className="border-t border-gray-100 hover:bg-gray-50">
                     <td className="px-4 py-2">
@@ -73,8 +72,7 @@ export default function CustomerDetail({ params }: { params: { id: string } }) {
                       {o.is_rush ? <Tag color="red">Rush</Tag> : null}
                     </td>
                     <td className="px-4 py-2"><StatusPill status={o.status} /></td>
-                    <td className="px-4 py-2 text-xs">{formatDate(o.adt_promised_date)}</td>
-                    <td className="px-4 py-2 text-right font-mono pr-5">{formatCurrency(o.subtotal)}</td>
+                    <td className="px-4 py-2 text-xs pr-5">{formatDate(o.adt_promised_date)}</td>
                   </tr>
                 ))}
               </tbody>

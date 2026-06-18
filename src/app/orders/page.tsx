@@ -24,7 +24,7 @@ export default function OrderDashboard({ searchParams }: { searchParams: { filte
 
   const orders = db.prepare(`
     SELECT o.id, o.order_number, o.po_number, c.name as company_name, o.roadmap, o.status,
-           o.adt_promised_date, o.subtotal, o.created_at, o.is_rush, o.approval_required, o.trigger_reason
+           o.adt_promised_date, o.created_at, o.is_rush, o.approval_required, o.trigger_reason
     FROM orders o JOIN companies c ON o.company_id = c.id
     WHERE ${where}
     ORDER BY o.created_at DESC LIMIT 50

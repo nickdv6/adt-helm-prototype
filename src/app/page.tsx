@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { getDb } from '@/lib/db';
 import { Card, CardHeader, StatusPill, Tag } from '@/components/ui';
-import { formatDate, formatCurrency, relativeTime } from '@/lib/utils';
+import { formatDate, relativeTime } from '@/lib/utils';
 
 // S04 CSR Home — Sarah's landing page
 // Per Decision S02-S15.1 locked home layout: header + left nav + main work surface + right rail.
@@ -12,7 +12,7 @@ export default function CSRHome() {
 
   // Aggregate widgets
   const pendingOrders = db.prepare(`
-    SELECT o.id, o.order_number, c.name as company_name, o.status, o.adt_promised_date, o.subtotal, o.created_at
+    SELECT o.id, o.order_number, c.name as company_name, o.status, o.adt_promised_date, o.created_at
     FROM orders o JOIN companies c ON o.company_id = c.id
     WHERE o.status IN ('Draft', 'Submitted', 'Waiting on Customer', 'Waiting on Artwork')
     ORDER BY o.created_at DESC
@@ -51,7 +51,7 @@ export default function CSRHome() {
   `).get() as any;
 
   const recentOrders = db.prepare(`
-    SELECT o.id, o.order_number, c.name as company_name, o.status, o.adt_promised_date, o.subtotal, o.created_at, o.is_rush
+    SELECT o.id, o.order_number, c.name as company_name, o.status, o.adt_promised_date, o.created_at, o.is_rush
     FROM orders o JOIN companies c ON o.company_id = c.id
     WHERE o.primary_csr_user_id = 3 OR 1=1
     ORDER BY o.created_at DESC LIMIT 10
@@ -85,12 +85,11 @@ export default function CSRHome() {
                   <th className="text-left px-5 py-2.5">Customer</th>
                   <th className="text-left px-5 py-2.5">Status</th>
                   <th className="text-left px-5 py-2.5">ADT Promised</th>
-                  <th className="text-right px-5 py-2.5">Value</th>
                 </tr>
               </thead>
               <tbody>
                 {pendingOrders.length === 0 && (
-                  <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-400">No pending orders.</td></tr>
+                  <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-400">No pending orders.</td></tr>
                 )}
                 {pendingOrders.map((o) => (
                   <tr key={o.id} className="border-t border-gray-100 hover:bg-gray-50">
@@ -100,7 +99,6 @@ export default function CSRHome() {
                     <td className="px-5 py-2.5">{o.company_name}</td>
                     <td className="px-5 py-2.5"><StatusPill status={o.status} /></td>
                     <td className="px-5 py-2.5">{formatDate(o.adt_promised_date)}</td>
-                    <td className="px-5 py-2.5 text-right font-mono">{formatCurrency(o.subtotal)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -117,7 +115,6 @@ export default function CSRHome() {
                   <th className="text-left px-5 py-2.5">Customer</th>
                   <th className="text-left px-5 py-2.5">Status</th>
                   <th className="text-left px-5 py-2.5">Promised</th>
-                  <th className="text-right px-5 py-2.5">Value</th>
                   <th className="text-right px-5 py-2.5">Age</th>
                 </tr>
               </thead>
@@ -131,7 +128,6 @@ export default function CSRHome() {
                     <td className="px-5 py-2.5">{o.company_name}</td>
                     <td className="px-5 py-2.5"><StatusPill status={o.status} /></td>
                     <td className="px-5 py-2.5">{formatDate(o.adt_promised_date)}</td>
-                    <td className="px-5 py-2.5 text-right font-mono">{formatCurrency(o.subtotal)}</td>
                     <td className="px-5 py-2.5 text-right text-xs text-gray-500">{relativeTime(o.created_at)}</td>
                   </tr>
                 ))}

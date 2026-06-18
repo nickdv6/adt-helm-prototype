@@ -1,17 +1,17 @@
 import Link from 'next/link';
 import { getDb } from '@/lib/db';
 import { Card, CardHeader, Tag, Button } from '@/components/ui';
-import { formatCurrency } from '@/lib/utils';
 
 // /customers — Customer Directory
 // Surfaces: name, industry, terms, credit hold, 3rd-party billing, recent order activity
+// Financial figures (LTV, revenue) intentionally not surfaced — those live in QuickBooks / accounting
 
 export default function CustomerList() {
   const db = getDb();
   const rows = db.prepare(`
     SELECT c.*,
       (SELECT COUNT(*) FROM orders o WHERE o.company_id = c.id) as order_count,
-      (SELECT COALESCE(SUM(o.subtotal), 0) FROM orders o WHERE o.company_id = c.id AND o.status IN ('Shipped','Invoiced','Closed')) as ltv
+      (SELECT COUNT(*) FROM orders o WHERE o.company_id = c.id AND o.status IN ('Shipped','Invoiced','Closed')) as completed_count
     FROM companies c
     WHERE c.is_legacy = 0
     ORDER BY c.name
@@ -35,8 +35,8 @@ export default function CustomerList() {
               <th className="text-left px-4 py-2.5">Industry</th>
               <th className="text-left px-4 py-2.5">Terms</th>
               <th className="text-left px-4 py-2.5">Flags</th>
-              <th className="text-right px-4 py-2.5">Orders</th>
-              <th className="text-right px-4 py-2.5 pr-5">Lifetime Value</th>
+              <th className="text-right px-4 py-2.5">Orders (all-time)</th>
+              <th className="text-right px-4 py-2.5 pr-5">Completed</th>
             </tr>
           </thead>
           <tbody>
@@ -53,7 +53,7 @@ export default function CustomerList() {
                   {c.is_blind_ship_default ? <Tag color="green">Blind Default</Tag> : null}
                 </td>
                 <td className="px-4 py-2.5 text-right font-mono">{c.order_count}</td>
-                <td className="px-4 py-2.5 text-right font-mono pr-5">{formatCurrency(c.ltv)}</td>
+                <td className="px-4 py-2.5 text-right font-mono pr-5">{c.completed_count}</td>
               </tr>
             ))}
           </tbody>

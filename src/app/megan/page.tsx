@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import { getDb } from '@/lib/db';
 import { Card, CardHeader, StatusPill, Tag } from '@/components/ui';
-import { formatDate, formatCurrency, relativeTime } from '@/lib/utils';
+import { formatDate, relativeTime } from '@/lib/utils';
 
 // S03 Megan Tabbed Home
-// Per S23-S32.50 (Megan A4): 4 tabs — Sales / Production / Finance / Approvals
+// Per S23-S32.50 (Megan A4): 4 tabs — Approvals / Production / Sales (intake) / Accounting Hand-Off
 // Per Decision 8.10: today + 7 days default window
 // Per OD-3: Approvals tab is THE work surface for the 6-trigger gate queue
+// Helm policy: financial figures are NOT surfaced on operational pages — accounting lives in QuickBooks
 
 export default function MeganHome({ searchParams }: { searchParams: { tab?: string } }) {
   const db = getDb();
@@ -32,7 +33,7 @@ export default function MeganHome({ searchParams }: { searchParams: { tab?: stri
         <TabLink href="/megan?tab=approvals" label="Approvals (OD-3 Gate)" count={tabCounts.approvals} active={tab === 'approvals'} accent="yellow" />
         <TabLink href="/megan?tab=production" label="Production" count={tabCounts.production} active={tab === 'production'} />
         <TabLink href="/megan?tab=sales" label="Sales / Pipeline" count={tabCounts.sales} active={tab === 'sales'} />
-        <TabLink href="/megan?tab=finance" label="Finance" count={tabCounts.finance} active={tab === 'finance'} />
+        <TabLink href="/megan?tab=finance" label="Accounting Hand-Off" count={tabCounts.finance} active={tab === 'finance'} />
       </div>
 
       {tab === 'approvals' && <ApprovalsTab />}
@@ -46,7 +47,7 @@ export default function MeganHome({ searchParams }: { searchParams: { tab?: stri
 function ApprovalsTab() {
   const db = getDb();
   const queue = db.prepare(`
-    SELECT o.id, o.order_number, c.name as company_name, o.subtotal, o.is_rush,
+    SELECT o.id, o.order_number, c.name as company_name, o.is_rush,
            o.trigger_reason, o.trigger_source, o.adt_promised_date, o.created_at,
            o.source_system
     FROM orders o JOIN companies c ON o.company_id = c.id
@@ -62,10 +63,9 @@ function ApprovalsTab() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <Stat label="In Queue" value={queue.length} accent="yellow" />
         <Stat label="Rush in Queue" value={queue.filter((q) => q.is_rush).length} accent="red" />
-        <Stat label="High Value (>$10K)" value={queue.filter((q) => q.subtotal > 10000).length} />
         <Stat label="Oldest in Queue" value={queue.length > 0 ? relativeTime([...queue].sort((a, b) => a.created_at.localeCompare(b.created_at))[0].created_at) : '—'} />
       </div>
 
@@ -78,7 +78,6 @@ function ApprovalsTab() {
               <th className="text-left px-4 py-2.5">Customer</th>
               <th className="text-left px-4 py-2.5">Trigger(s)</th>
               <th className="text-left px-4 py-2.5">Source</th>
-              <th className="text-right px-4 py-2.5">Value</th>
               <th className="text-left px-4 py-2.5">Promised</th>
               <th className="text-right px-4 py-2.5">Age in Queue</th>
               <th className="text-right px-4 py-2.5 pr-5">Action</th>
@@ -86,7 +85,7 @@ function ApprovalsTab() {
           </thead>
           <tbody>
             {queue.length === 0 && (
-              <tr><td colSpan={8} className="text-center py-10 text-gray-400">Approval queue is empty.</td></tr>
+              <tr><td colSpan={7} className="text-center py-10 text-gray-400">Approval queue is empty.</td></tr>
             )}
             {queue.map((o) => (
               <tr key={o.id} className="border-t border-gray-100 hover:bg-gray-50">
@@ -101,7 +100,6 @@ function ApprovalsTab() {
                   ))}
                 </td>
                 <td className="px-4 py-2.5 text-xs text-gray-500">{o.trigger_source || '—'}</td>
-                <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(o.subtotal)}</td>
                 <td className="px-4 py-2.5 text-xs">{formatDate(o.adt_promised_date)}</td>
                 <td className="px-4 py-2.5 text-right text-xs text-gray-500">{relativeTime(o.created_at)}</td>
                 <td className="px-4 py-2.5 pr-5 text-right">
@@ -135,7 +133,7 @@ function ApprovalsTab() {
 function ProductionTab() {
   const db = getDb();
   const inProd = db.prepare(`
-    SELECT o.id, o.order_number, c.name as company_name, o.adt_promised_date, o.subtotal, o.roadmap, o.is_rush
+    SELECT o.id, o.order_number, c.name as company_name, o.adt_promised_date, o.roadmap, o.is_rush
     FROM orders o JOIN companies c ON o.company_id = c.id
     WHERE o.status IN ('In Production', 'Partially Complete')
     ORDER BY date(o.adt_promised_date) ASC LIMIT 40
@@ -173,8 +171,7 @@ function ProductionTab() {
                   <th className="text-left px-4 py-2.5">Order #</th>
                   <th className="text-left px-4 py-2.5">Customer</th>
                   <th className="text-left px-4 py-2.5">Roadmap</th>
-                  <th className="text-left px-4 py-2.5">Promised</th>
-                  <th className="text-right px-4 py-2.5 pr-5">Value</th>
+                  <th className="text-left px-4 py-2.5 pr-5">Promised</th>
                 </tr>
               </thead>
               <tbody>
@@ -186,8 +183,7 @@ function ProductionTab() {
                     </td>
                     <td className="px-4 py-2.5">{o.company_name}</td>
                     <td className="px-4 py-2.5 font-mono text-xs">{o.roadmap}</td>
-                    <td className="px-4 py-2.5 text-xs">{formatDate(o.adt_promised_date)}</td>
-                    <td className="px-4 py-2.5 text-right font-mono pr-5">{formatCurrency(o.subtotal)}</td>
+                    <td className="px-4 py-2.5 text-xs pr-5">{formatDate(o.adt_promised_date)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -213,16 +209,16 @@ function ProductionTab() {
 function SalesTab() {
   const db = getDb();
   const recent = db.prepare(`
-    SELECT o.id, o.order_number, c.name as company_name, o.subtotal, o.status, o.created_at, o.source_system
+    SELECT o.id, o.order_number, c.name as company_name, o.status, o.created_at, o.source_system
     FROM orders o JOIN companies c ON o.company_id = c.id
     WHERE date(o.created_at) >= date('now', '-7 days')
     ORDER BY o.created_at DESC LIMIT 25
   `).all() as any[];
 
   const bySource = db.prepare(`
-    SELECT source_system, COUNT(*) as c, SUM(subtotal) as v FROM orders
+    SELECT source_system, COUNT(*) as c FROM orders
     WHERE date(created_at) >= date('now', '-30 days')
-    GROUP BY source_system ORDER BY v DESC
+    GROUP BY source_system ORDER BY c DESC
   `).all() as any[];
 
   return (
@@ -236,7 +232,6 @@ function SalesTab() {
               <th className="text-left px-4 py-2.5">Customer</th>
               <th className="text-left px-4 py-2.5">Source</th>
               <th className="text-left px-4 py-2.5">Status</th>
-              <th className="text-right px-4 py-2.5">Value</th>
               <th className="text-right px-4 py-2.5 pr-5">Age</th>
             </tr>
           </thead>
@@ -247,7 +242,6 @@ function SalesTab() {
                 <td className="px-4 py-2.5">{o.company_name}</td>
                 <td className="px-4 py-2.5 text-xs text-gray-500">{o.source_system}</td>
                 <td className="px-4 py-2.5"><StatusPill status={o.status} /></td>
-                <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(o.subtotal)}</td>
                 <td className="px-4 py-2.5 text-right text-xs text-gray-500 pr-5">{relativeTime(o.created_at)}</td>
               </tr>
             ))}
@@ -255,21 +249,19 @@ function SalesTab() {
         </table>
       </Card>
       <Card>
-        <CardHeader title="Revenue by Source (Last 30 Days)" subtitle="Helps Megan see which intake channels are driving volume" />
+        <CardHeader title="Order Volume by Source (Last 30 Days)" subtitle="Which intake channels are driving operational load" />
         <table className="w-full text-sm">
           <thead className="text-xs text-gray-500 uppercase tracking-wider border-b border-gray-200">
             <tr>
               <th className="text-left px-4 py-2.5">Source System</th>
-              <th className="text-right px-4 py-2.5">Order Count</th>
-              <th className="text-right px-4 py-2.5 pr-5">Revenue</th>
+              <th className="text-right px-4 py-2.5 pr-5">Order Count</th>
             </tr>
           </thead>
           <tbody>
             {bySource.map((r) => (
               <tr key={r.source_system} className="border-t border-gray-100">
                 <td className="px-4 py-2.5 text-xs font-mono">{r.source_system}</td>
-                <td className="px-4 py-2.5 text-right font-mono">{r.c}</td>
-                <td className="px-4 py-2.5 text-right font-mono pr-5">{formatCurrency(r.v)}</td>
+                <td className="px-4 py-2.5 text-right font-mono pr-5">{r.c}</td>
               </tr>
             ))}
           </tbody>
@@ -281,22 +273,25 @@ function SalesTab() {
 
 function FinanceTab() {
   const db = getDb();
-  const shipped = db.prepare(`SELECT COUNT(*) as c, SUM(subtotal) as v FROM orders WHERE status IN ('Shipped','Invoiced') AND date(created_at) >= date('now', '-30 days')`).get() as any;
-  const closed = db.prepare(`SELECT COUNT(*) as c, SUM(subtotal) as v FROM orders WHERE status = 'Closed' AND date(created_at) >= date('now', '-30 days')`).get() as any;
-  const ar = db.prepare(`SELECT COUNT(*) as c, SUM(subtotal) as v FROM orders WHERE status = 'Invoiced'`).get() as any;
-  const onHold = db.prepare(`SELECT id, order_number, c.name as cn, o.subtotal FROM orders o JOIN companies c ON o.company_id = c.id WHERE o.status = 'On Hold'`).all() as any[];
+  const shipped = db.prepare(`SELECT COUNT(*) as c FROM orders WHERE status IN ('Shipped','Invoiced') AND date(created_at) >= date('now', '-30 days')`).get() as any;
+  const closed = db.prepare(`SELECT COUNT(*) as c FROM orders WHERE status = 'Closed' AND date(created_at) >= date('now', '-30 days')`).get() as any;
+  const readyForInvoice = db.prepare(`SELECT COUNT(*) as c FROM orders WHERE status = 'Shipped' AND date(created_at) >= date('now', '-30 days')`).get() as any;
+  const onHold = db.prepare(`SELECT o.id, o.order_number, c.name as cn, o.status FROM orders o JOIN companies c ON o.company_id = c.id WHERE o.status = 'On Hold'`).all() as any[];
   const creditHold = db.prepare(`SELECT id, name FROM companies WHERE is_credit_hold = 1`).all() as any[];
 
   return (
     <div className="space-y-6">
+      <div className="text-xs text-gray-500 italic">
+        Helm tracks operational handoff to accounting — order counts, hold statuses, invoice-ready flags. Dollar amounts, invoice totals, and A/R balances live in QuickBooks; Helm does not surface them on this page.
+      </div>
       <div className="grid grid-cols-3 gap-4">
-        <Stat label="Shipped (30d)" value={`${shipped.c} · ${formatCurrency(shipped.v)}`} accent="green" />
-        <Stat label="Closed (30d)" value={`${closed.c} · ${formatCurrency(closed.v)}`} />
-        <Stat label="Open A/R (Invoiced)" value={`${ar.c} · ${formatCurrency(ar.v)}`} accent="yellow" />
+        <Stat label="Shipped Last 30d" value={shipped.c} accent="green" />
+        <Stat label="Ready to Invoice (QB Hand-off)" value={readyForInvoice.c} accent="yellow" />
+        <Stat label="Closed Last 30d" value={closed.c} />
       </div>
       <div className="grid grid-cols-2 gap-6">
         <Card>
-          <CardHeader title="On Hold (Finance Review)" />
+          <CardHeader title="On Hold" subtitle="Orders parked pending CSR / Megan / customer action" />
           <div className="divide-y divide-gray-100">
             {onHold.length === 0 && <div className="px-5 py-6 text-xs text-gray-400">No orders on hold.</div>}
             {onHold.map((o) => (
@@ -305,13 +300,13 @@ function FinanceTab() {
                   <Link href={`/orders/${o.id}`} className="font-mono text-navy-700 hover:underline">{o.order_number}</Link>
                   <span className="text-gray-500 ml-2 text-xs">{o.cn}</span>
                 </div>
-                <span className="font-mono">{formatCurrency(o.subtotal)}</span>
+                <StatusPill status={o.status} />
               </div>
             ))}
           </div>
         </Card>
         <Card>
-          <CardHeader title="Customers on Credit Hold" />
+          <CardHeader title="Customers on Credit Hold" subtitle="Helm flag set; balance / collections handled in QuickBooks" />
           <div className="divide-y divide-gray-100">
             {creditHold.length === 0 && <div className="px-5 py-6 text-xs text-gray-400">No credit holds.</div>}
             {creditHold.map((c) => (

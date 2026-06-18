@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import { getDb } from '@/lib/db';
 import { Card, CardHeader, StatusPill, Tag, Button } from '@/components/ui';
-import { formatDate, formatCurrency, relativeTime } from '@/lib/utils';
+import { formatDate, relativeTime } from '@/lib/utils';
 
 // S35 Pack-and-Ship (Lucio / Finishing)
 // Per Decision: auto-rate at Ready-to-Ship → carrier label printed → tracked
-// Per S35-S36.35: 3rd-party billing surfaced (carrier account # shown, $0.00 invoice line)
+// Per S35-S36.35: 3rd-party billing surfaced (carrier account # shown; no ADT-billed freight line)
 // Per Megan B4: 3rd-party billed shipments treated separately
 // S35b Returns dashboard appended below
 
@@ -14,7 +14,7 @@ export default function Shipping({ searchParams }: { searchParams: { tab?: strin
   const tab = searchParams?.tab ?? 'ready';
 
   const readyToShip = db.prepare(`
-    SELECT o.id, o.order_number, c.name as company_name, o.subtotal, o.adt_promised_date,
+    SELECT o.id, o.order_number, c.name as company_name, o.adt_promised_date,
            o.is_rush, o.is_blind_ship, c.is_third_party_billed,
            c.carrier_account_carrier, c.carrier_account_number
     FROM orders o JOIN companies c ON o.company_id = c.id
@@ -23,7 +23,7 @@ export default function Shipping({ searchParams }: { searchParams: { tab?: strin
   `).all() as any[];
 
   const recentShipped = db.prepare(`
-    SELECT o.id, o.order_number, c.name as company_name, o.subtotal, o.adt_promised_date,
+    SELECT o.id, o.order_number, c.name as company_name, o.adt_promised_date,
            c.is_third_party_billed, c.carrier_account_carrier, c.carrier_account_number
     FROM orders o JOIN companies c ON o.company_id = c.id
     WHERE o.status IN ('Shipped','Invoiced')
@@ -68,13 +68,12 @@ export default function Shipping({ searchParams }: { searchParams: { tab?: strin
                 <th className="text-left px-4 py-2.5">Promised</th>
                 <th className="text-left px-4 py-2.5">Flags</th>
                 <th className="text-left px-4 py-2.5">Billing</th>
-                <th className="text-right px-4 py-2.5">Value</th>
                 <th className="text-right px-4 py-2.5 pr-5">Action</th>
               </tr>
             </thead>
             <tbody>
               {readyToShip.length === 0 && (
-                <tr><td colSpan={7} className="text-center py-10 text-gray-400">Queue is clear.</td></tr>
+                <tr><td colSpan={6} className="text-center py-10 text-gray-400">Queue is clear.</td></tr>
               )}
               {readyToShip.map((o) => (
                 <tr key={o.id} className="border-t border-gray-100 hover:bg-gray-50">
@@ -92,7 +91,6 @@ export default function Shipping({ searchParams }: { searchParams: { tab?: strin
                       ? <Tag color="yellow">3rd-Party · {o.carrier_account_carrier} #{o.carrier_account_number}</Tag>
                       : <span className="text-gray-500">ADT account</span>}
                   </td>
-                  <td className="px-4 py-2.5 text-right font-mono">{formatCurrency(o.subtotal)}</td>
                   <td className="px-4 py-2.5 text-right pr-5">
                     <Button variant="secondary">Auto-Rate + Print</Button>
                   </td>
@@ -111,8 +109,8 @@ export default function Shipping({ searchParams }: { searchParams: { tab?: strin
               <tr>
                 <th className="text-left px-4 py-2.5">Order #</th>
                 <th className="text-left px-4 py-2.5">Customer</th>
-                <th className="text-left px-4 py-2.5">Billing</th>
-                <th className="text-right px-4 py-2.5 pr-5">Value</th>
+                <th className="text-left px-4 py-2.5">Promised</th>
+                <th className="text-left px-4 py-2.5 pr-5">Billing</th>
               </tr>
             </thead>
             <tbody>
@@ -122,12 +120,12 @@ export default function Shipping({ searchParams }: { searchParams: { tab?: strin
                     <Link href={`/orders/${o.id}`} className="font-mono text-navy-700 hover:underline">{o.order_number}</Link>
                   </td>
                   <td className="px-4 py-2.5">{o.company_name}</td>
-                  <td className="px-4 py-2.5 text-xs">
+                  <td className="px-4 py-2.5 text-xs">{formatDate(o.adt_promised_date)}</td>
+                  <td className="px-4 py-2.5 text-xs pr-5">
                     {o.is_third_party_billed
                       ? <Tag color="yellow">3rd-Party</Tag>
                       : <span className="text-gray-500">ADT</span>}
                   </td>
-                  <td className="px-4 py-2.5 text-right font-mono pr-5">{formatCurrency(o.subtotal)}</td>
                 </tr>
               ))}
             </tbody>

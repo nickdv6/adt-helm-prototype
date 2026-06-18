@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { getDb } from '@/lib/db';
 import { Card, CardHeader, StatusPill, Tag, Button } from '@/components/ui';
-import { formatDate, formatCurrency, relativeTime } from '@/lib/utils';
+import { formatDate, relativeTime } from '@/lib/utils';
 import { notFound } from 'next/navigation';
 
 // S21 Order Detail
@@ -60,9 +60,8 @@ export default function OrderDetail({ params }: { params: { id: string } }) {
       </header>
 
       {/* Quick stats row */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <Stat label="Roadmap" value={order.roadmap} />
-        <Stat label="Subtotal" value={formatCurrency(order.subtotal)} />
         <Stat label="Lines" value={lines.length} />
         <Stat label="PRs" value={prs.length} />
       </div>
@@ -98,9 +97,8 @@ export default function OrderDetail({ params }: { params: { id: string } }) {
                   <div className="text-sm text-gray-600">{line.fabric_name}</div>
                   {line.plant_number && <Tag color="blue">{line.plant_number}</Tag>}
                   {line.colorway_name && <Tag>{line.colorway_name}</Tag>}
-                  <div className="ml-auto text-sm">
-                    {line.quantity} {line.quantity_unit} × {formatCurrency(line.unit_price)} =
-                    <strong className="font-mono ml-2">{formatCurrency(line.quantity * (line.unit_price || 0))}</strong>
+                  <div className="ml-auto text-sm font-mono">
+                    {line.quantity} {line.quantity_unit}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 text-xs">
@@ -138,7 +136,7 @@ export default function OrderDetail({ params }: { params: { id: string } }) {
           <div className="px-5 py-3 text-sm">
             Shipping billed to customer's <strong>{order.carrier_account_carrier}</strong> account
             <span className="font-mono ml-2">#{order.carrier_account_number}</span>.
-            Invoice line will show $0.00 with carrier-account note (per S35-S36.35).
+            Carrier-account note carried on the shipping record (no ADT-billed freight line).
           </div>
         </Card>
       ) : null}

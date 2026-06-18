@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { getDb } from '@/lib/db';
 import { Card, CardHeader, StatusPill, Tag, Button } from '@/components/ui';
-import { formatDate, relativeTime, formatCurrency } from '@/lib/utils';
+import { formatDate, relativeTime } from '@/lib/utils';
 
 // S31 Cut/Sew Workboard (Yuliana)
 // Per Yuliana's checklist:

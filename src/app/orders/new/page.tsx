@@ -77,7 +77,7 @@ export default function NewOrder() {
             <li>New Customer — first 3 production orders</li>
             <li>New Artwork — conditional, per Trigger 2 logic</li>
             <li>Rush — &lt;5 BD fabric-only / &lt;10 BD finished product</li>
-            <li>High Value — ≥$10K order OR ≥$5K PR with other risk</li>
+            <li>High Value / High Stakes — admin-configured threshold (configurable per customer + per product mix; pricing thresholds live in Settings, not here)</li>
             <li>Manual Flag — CSR / Sales / etc. with reason code</li>
             <li>Prior Issue / Account Watch</li>
           </ol>
