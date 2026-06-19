@@ -268,9 +268,16 @@ const insPR = db.prepare(`
     planned_yardage, printed_yardage, strike_off_classification, colorist_user_id,
     is_click_and_print, was_csv_auto_routed, internal_proof_status, internal_proof_requested_at,
     internal_proof_resolved_at, internal_proof_resolved_by_user_id, hot_folder_target, scheduled_at,
-    assigned_to_user_id, roll_number, created_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    assigned_to_user_id, created_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
+
+// Rolls are created at pack-out time only. Multi-roll-per-PR is the norm with overage/underage.
+const insPRRoll = db.prepare(`
+  INSERT INTO pr_rolls (pr_id, roll_number, yards, packed_at, packed_by_user_id, ship_status, shipped_at, created_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+`);
+let rollSequence = 8400; // global roll counter — roll numbers are sequential physical-roll identifiers
 
 const orderStatuses: { status: string; cfs: string; weight: number }[] = [
   { status: 'Draft', cfs: 'In Progress', weight: 3 },
@@ -433,12 +440,7 @@ for (let i = 0; i < totalOrders; i++) {
       if (prStatus === 'Complete') return userByRole['shipping'] ?? userByRole['finishing'];
       return userByRole['csr'];
     })();
-    // Roll number assigned once the PR has reached at least Printing — represents the physical roll
-    // the fabric was printed onto. Hex-style identifier matches the Parent QR pattern used elsewhere.
-    const rollNumber = ['Printing', 'Printed', 'Complete'].includes(prStatus)
-      ? `R-${faker.string.alphanumeric(6).toUpperCase()}`
-      : null;
-    insPR.run(
+    const prRes = insPR.run(
       `PR-${prCounter++}`, lineId, printer.id, sku.fabric_id,
       printer.ink_set.toLowerCase().replace(/ /g, '_'),
       prStatus,
@@ -452,9 +454,46 @@ for (let i = 0; i < totalOrders; i++) {
       ['Scheduled', 'Printing', 'Printed', 'Complete'].includes(prStatus)
         ? faker.date.recent({ days: 3 }).toISOString() : null,
       prAssignedTo,
-      rollNumber,
       createdAt,
     );
+    const prId = prRes.lastInsertRowid as number;
+
+    // Generate physical rolls at pack-out. PRs at status 'Complete' or later (or whose parent order
+    // is already Ready/Shipped/etc.) have been packed. Multi-roll per PR with realistic yardage
+    // variance — e.g. a 500-yd PR may yield 99 + 100 + 101 + 102 + 106 yards across 5 rolls.
+    const isPacked = ['Complete'].includes(prStatus) || ['Ready to Ship','Shipped','Invoiced','Closed'].includes(ordStatus.status);
+    if (isPacked && sku.product_type === 'yardage' && qty >= 30) {
+      // Split the printed yardage into rolls of ~100yd each (with variance)
+      let remaining = qty;
+      const packedAt = faker.date.recent({ days: 2 }).toISOString();
+      const packedBy = userByRole['finishing'];
+      const orderShipped = ['Shipped','Invoiced','Closed'].includes(ordStatus.status);
+      while (remaining > 0) {
+        // Target each roll ~95-105 yards, with last roll taking the remainder
+        const target = remaining > 110 ? faker.number.int({ min: 92, max: 108 }) : remaining;
+        const rollYards = Math.min(target, remaining);
+        insPRRoll.run(
+          prId,
+          String(rollSequence++),
+          rollYards,
+          packedAt,
+          packedBy,
+          orderShipped ? 'shipped' : 'packed',
+          orderShipped ? faker.date.recent({ days: 1 }).toISOString() : null,
+          packedAt,
+        );
+        remaining -= rollYards;
+      }
+    } else if (isPacked && sku.product_type === 'yardage') {
+      // Smaller order — one roll
+      insPRRoll.run(
+        prId, String(rollSequence++), qty,
+        faker.date.recent({ days: 2 }).toISOString(), userByRole['finishing'],
+        ['Shipped','Invoiced','Closed'].includes(ordStatus.status) ? 'shipped' : 'packed',
+        ['Shipped','Invoiced','Closed'].includes(ordStatus.status) ? faker.date.recent({ days: 1 }).toISOString() : null,
+        faker.date.recent({ days: 2 }).toISOString(),
+      );
+    }
   }
 }
 

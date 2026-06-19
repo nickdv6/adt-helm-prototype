@@ -5,21 +5,30 @@ import Link from 'next/link';
 import { ChevronRight, ChevronDown, X, AlertTriangle } from 'lucide-react';
 import { Tag, Button, StatusPill } from './ui';
 
-// One Ready-to-Ship order row + expandable child PRs + ship/partial-ship confirmation flow.
-// Distinguishes three shipment paths per Nick:
-//   1. Complete order shipment — all child PRs ship together
-//   2. Partial shipment — operator picks a subset
-//   3. Individual PR shipment — single PR shipped on its own
+// One Ready-to-Ship order row + expandable child PRs (each PR can have multiple rolls).
+// Roll #s are pack-out-time identifiers — surfaced here on the Shipping page only.
+//
+// Three shipment paths distinguished per Nick:
+//   1. Complete order shipment — every packed roll on every PR goes out together
+//   2. Partial shipment — operator picks a subset of rolls across one or more PRs
+//   3. Individual roll shipment — single roll shipped on its own (prompts when others remain)
+
+type Roll = {
+  id: number;
+  roll_number: string;
+  yards: number;
+  ship_status: 'packed' | 'shipped';
+};
 
 type PR = {
   id: number;
   pr_number: string;
-  roll_number: string | null;
   status: string;
   planned_yardage: number | null;
   printed_yardage: number | null;
   design_name: string | null;
   colorway_name: string | null;
+  rolls: Roll[];
 };
 
 type Order = {
@@ -36,16 +45,18 @@ type Order = {
 
 export function ShippingOrderRow({ order, prs }: { order: Order; prs: PR[] }) {
   const [expanded, setExpanded] = useState(false);
-  // selection set tracks which PR ids the operator has chosen for a partial ship
+  // Selection set is keyed by roll ID — operator can pick any subset of rolls across PRs
   const [selected, setSelected] = useState<Set<number>>(new Set());
-  // confirm modal: null = closed; otherwise either 'partial' (multi-PR subset) or 'individual' (single PR)
-  const [confirm, setConfirm] = useState<null | { mode: 'partial' | 'individual'; prIds: number[] }>(null);
+  const [confirm, setConfirm] = useState<null | { mode: 'partial' | 'individual'; rollIds: number[] }>(null);
 
-  const total = prs.length;
-  const selectedCount = selected.size;
-  const allSelected = total > 0 && selectedCount === total;
+  const allRolls = prs.flatMap((pr) => pr.rolls.filter((r) => r.ship_status === 'packed'));
+  const totalRolls = allRolls.length;
+  const totalYards = allRolls.reduce((s, r) => s + r.yards, 0);
+  const selectedRolls = allRolls.filter((r) => selected.has(r.id));
+  const selectedYards = selectedRolls.reduce((s, r) => s + r.yards, 0);
+  const allSelected = totalRolls > 0 && selected.size === totalRolls;
 
-  const toggleOne = (id: number) => {
+  const toggleRoll = (id: number) => {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
@@ -54,32 +65,27 @@ export function ShippingOrderRow({ order, prs }: { order: Order; prs: PR[] }) {
   };
 
   const handleShipFull = () => {
-    // Complete order shipment — no confirmation needed; the action itself is the "ship everything" path
-    alert(`(prototype) Shipping COMPLETE order ${order.order_number} — ${total} print request${total !== 1 ? 's' : ''}`);
+    alert(`(prototype) Shipping COMPLETE order ${order.order_number} — ${totalRolls} roll${totalRolls !== 1 ? 's' : ''} · ${totalYards} yds`);
   };
 
   const handleShipSelected = () => {
-    const prIds = [...selected];
-    // If they happen to have selected ALL PRs, treat as full-ship — no partial prompt needed
-    if (prIds.length === total) { handleShipFull(); return; }
-    setConfirm({ mode: 'partial', prIds });
+    const ids = [...selected];
+    if (ids.length === totalRolls) { handleShipFull(); return; }
+    setConfirm({ mode: 'partial', rollIds: ids });
   };
 
-  const handleShipOne = (prId: number) => {
-    // Individual PR shipment when there are siblings still pending = a kind of partial. Trigger
-    // the confirm prompt so the operator knows the parent order will stay open.
-    if (total > 1) {
-      setConfirm({ mode: 'individual', prIds: [prId] });
+  const handleShipOneRoll = (rollId: number) => {
+    if (totalRolls > 1) {
+      setConfirm({ mode: 'individual', rollIds: [rollId] });
     } else {
-      // Single-PR order — individual ship IS the full ship
       handleShipFull();
     }
   };
 
   const confirmShip = () => {
     if (!confirm) return;
-    const pks = confirm.prIds.map((id) => prs.find((p) => p.id === id)?.pr_number).filter(Boolean).join(', ');
-    alert(`(prototype) Shipped ${pks} — parent order ${order.order_number} remains OPEN until remaining PRs ship`);
+    const rollNums = confirm.rollIds.map((id) => allRolls.find((r) => r.id === id)?.roll_number).filter(Boolean).join(', ');
+    alert(`(prototype) Shipped roll(s) ${rollNums} — parent order ${order.order_number} remains OPEN until remaining rolls ship`);
     setConfirm(null);
     setSelected(new Set());
   };
@@ -101,7 +107,7 @@ export function ShippingOrderRow({ order, prs }: { order: Order; prs: PR[] }) {
         <td className="px-3 py-2.5">
           {order.is_rush ? <Tag color="red">Rush</Tag> : null}
           {order.is_blind_ship ? <Tag color="green">Blind</Tag> : null}
-          <span className="text-[11px] text-gray-500 ml-1">{total} PR{total !== 1 ? 's' : ''}</span>
+          <span className="text-[11px] text-gray-500 ml-1">{prs.length} PR{prs.length !== 1 ? 's' : ''} · {totalRolls} roll{totalRolls !== 1 ? 's' : ''}</span>
         </td>
         <td className="px-3 py-2.5 text-xs">
           {order.is_third_party_billed
@@ -109,91 +115,112 @@ export function ShippingOrderRow({ order, prs }: { order: Order; prs: PR[] }) {
             : <span className="text-gray-500">ADT account</span>}
         </td>
         <td className="px-3 py-2.5 text-right pr-3">
-          <Button size="sm" onClick={handleShipFull}>Ship full order</Button>
+          <Button size="sm" onClick={handleShipFull} disabled={totalRolls === 0}>Ship full order</Button>
         </td>
       </tr>
 
-      {/* Expanded panel — per-PR list with selection + individual ship */}
+      {/* Expanded panel — PRs with their packed rolls */}
       {expanded && (
         <tr className="bg-gray-50/60">
           <td colSpan={7} className="p-0">
-            <div className="px-5 py-3 border-l-2 border-navy-500">
-              <div className="flex items-center justify-between mb-2">
+            <div className="px-5 py-3 border-l-2 border-navy-500 space-y-3">
+              <div className="flex items-center justify-between">
                 <div className="text-[11px] uppercase tracking-wider text-gray-600 font-semibold">
-                  Print Requests on this order ({total})
+                  Print Requests on this order ({prs.length}) · {totalRolls} packed roll{totalRolls !== 1 ? 's' : ''}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-[11px] text-gray-500">{selectedCount} selected</span>
+                  <span className="text-[11px] text-gray-500">
+                    {selected.size} selected{selected.size > 0 && ` · ${selectedYards} yds`}
+                  </span>
                   <Button
                     size="sm"
                     variant="secondary"
-                    disabled={selectedCount === 0}
+                    disabled={selected.size === 0}
                     onClick={handleShipSelected}
                   >
                     {allSelected ? 'Ship selected (all)' : 'Ship selected (partial)'}
                   </Button>
                 </div>
               </div>
-              <table className="w-full text-xs">
-                <thead className="text-gray-500 uppercase tracking-wider border-b border-gray-200">
-                  <tr>
-                    <th className="w-8 px-2 py-1.5"></th>
-                    <th className="text-left px-2 py-1.5">PR #</th>
-                    <th className="text-left px-2 py-1.5">Roll #</th>
-                    <th className="text-left px-2 py-1.5">Design / Colorway</th>
-                    <th className="text-left px-2 py-1.5">Status</th>
-                    <th className="text-right px-2 py-1.5">Yards</th>
-                    <th className="text-right px-2 py-1.5 pr-3">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {prs.map((pr) => (
-                    <tr key={pr.id} className="border-t border-gray-100 hover:bg-white">
-                      <td className="px-2 py-1.5">
-                        <input
-                          type="checkbox"
-                          checked={selected.has(pr.id)}
-                          onChange={() => toggleOne(pr.id)}
-                          className="w-3.5 h-3.5"
-                        />
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <Link href={`/print-requests/${pr.id}`} className="font-mono text-navy-700 hover:underline font-semibold">{pr.pr_number}</Link>
-                      </td>
-                      <td className="px-2 py-1.5 font-mono">
-                        {pr.roll_number ? <span className="text-navy-700">{pr.roll_number}</span> : <span className="text-gray-400 italic">not yet</span>}
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <span className="font-medium">{pr.design_name || '—'}</span>
-                        {pr.colorway_name && <span className="text-gray-500 ml-1.5">· {pr.colorway_name}</span>}
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <StatusPill status={pr.status} />
-                      </td>
-                      <td className="px-2 py-1.5 text-right font-mono">
-                        {pr.printed_yardage ?? '—'}/{pr.planned_yardage ?? '—'}
-                      </td>
-                      <td className="px-2 py-1.5 text-right pr-3">
-                        <Button size="sm" variant="ghost" onClick={() => handleShipOne(pr.id)}>
-                          Ship just this PR
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+
+              {prs.map((pr) => (
+                <div key={pr.id} className="bg-white border border-gray-200 rounded">
+                  {/* PR header */}
+                  <div className="px-3 py-2 border-b border-gray-100 flex items-center gap-3 bg-gray-50">
+                    <Link href={`/print-requests/${pr.id}`} className="font-mono text-navy-700 hover:underline font-semibold text-sm">{pr.pr_number}</Link>
+                    <span className="text-xs">
+                      <span className="font-semibold">{pr.design_name || '—'}</span>
+                      {pr.colorway_name && <span className="text-gray-500 ml-1">· {pr.colorway_name}</span>}
+                    </span>
+                    <StatusPill status={pr.status} />
+                    <span className="ml-auto text-xs text-gray-500">
+                      Printed {pr.printed_yardage ?? '—'}/{pr.planned_yardage ?? '—'} yd ·
+                      <span className="ml-1.5 font-semibold">
+                        {pr.rolls.length} roll{pr.rolls.length !== 1 ? 's' : ''}
+                      </span>
+                    </span>
+                  </div>
+
+                  {/* Rolls table — one row per roll */}
+                  {pr.rolls.length === 0 ? (
+                    <div className="px-3 py-3 text-xs text-gray-400 italic">No rolls packed yet for this PR.</div>
+                  ) : (
+                    <table className="w-full text-xs">
+                      <thead className="text-gray-500 uppercase tracking-wider border-b border-gray-100 bg-white">
+                        <tr>
+                          <th className="w-8 px-2 py-1.5"></th>
+                          <th className="text-left px-2 py-1.5">Roll #</th>
+                          <th className="text-right px-2 py-1.5">Yards</th>
+                          <th className="text-left px-2 py-1.5">Status</th>
+                          <th className="text-right px-2 py-1.5 pr-3">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pr.rolls.map((roll) => {
+                          const isShipped = roll.ship_status === 'shipped';
+                          return (
+                            <tr key={roll.id} className="border-t border-gray-100">
+                              <td className="px-2 py-1.5">
+                                <input
+                                  type="checkbox"
+                                  checked={selected.has(roll.id)}
+                                  onChange={() => toggleRoll(roll.id)}
+                                  disabled={isShipped}
+                                  className="w-3.5 h-3.5 disabled:opacity-30"
+                                />
+                              </td>
+                              <td className="px-2 py-1.5 font-mono font-semibold text-navy-700">{roll.roll_number}</td>
+                              <td className="px-2 py-1.5 text-right font-mono">{roll.yards}</td>
+                              <td className="px-2 py-1.5">
+                                {isShipped ? <Tag color="green">Shipped</Tag> : <Tag color="blue">Packed</Tag>}
+                              </td>
+                              <td className="px-2 py-1.5 text-right pr-3">
+                                {!isShipped && (
+                                  <Button size="sm" variant="ghost" onClick={() => handleShipOneRoll(roll.id)}>
+                                    Ship just this roll
+                                  </Button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              ))}
             </div>
           </td>
         </tr>
       )}
 
-      {/* Confirmation modal for partial / individual ship */}
+      {/* Confirmation modal */}
       {confirm && (
         <PartialShipConfirm
           orderNumber={order.order_number}
           mode={confirm.mode}
-          prNumbers={confirm.prIds.map((id) => prs.find((p) => p.id === id)?.pr_number || '').filter(Boolean)}
-          remainingCount={total - confirm.prIds.length}
+          rolls={confirm.rollIds.map((id) => allRolls.find((r) => r.id === id)).filter(Boolean) as Roll[]}
+          remainingCount={totalRolls - confirm.rollIds.length}
           onCancel={() => setConfirm(null)}
           onConfirm={confirmShip}
         />
@@ -203,15 +230,16 @@ export function ShippingOrderRow({ order, prs }: { order: Order; prs: PR[] }) {
 }
 
 function PartialShipConfirm({
-  orderNumber, mode, prNumbers, remainingCount, onCancel, onConfirm,
+  orderNumber, mode, rolls, remainingCount, onCancel, onConfirm,
 }: {
   orderNumber: string;
   mode: 'partial' | 'individual';
-  prNumbers: string[];
+  rolls: Roll[];
   remainingCount: number;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const yardsBeingShipped = rolls.reduce((s, r) => s + r.yards, 0);
   return (
     <tr>
       <td colSpan={7} className="p-0">
@@ -221,22 +249,25 @@ function PartialShipConfirm({
             <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
               <div className="flex items-center gap-2 text-yellow-900">
                 <AlertTriangle className="w-5 h-5" />
-                <div className="text-base font-bold">{mode === 'individual' ? 'Ship single PR?' : 'Confirm partial shipment'}</div>
+                <div className="text-base font-bold">
+                  {mode === 'individual' ? 'Ship single roll?' : 'Confirm partial shipment'}
+                </div>
               </div>
               <button onClick={onCancel} className="text-gray-400 hover:text-gray-700"><X className="w-5 h-5" /></button>
             </div>
             <div className="px-5 py-4 space-y-3 text-sm">
               <p className="text-gray-800">
                 You are shipping only part of order <span className="font-mono font-semibold">{orderNumber}</span>.
-                The complete order will remain open until the remaining {remainingCount} print request{remainingCount !== 1 ? 's' : ''}
-                {remainingCount === 1 ? ' is' : ' are'} shipped. Do you want to continue?
+                The complete order will remain open until the remaining {remainingCount} roll{remainingCount !== 1 ? 's are' : ' is'} shipped. Do you want to continue?
               </p>
               <div className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded p-2.5">
-                <div className="font-semibold uppercase tracking-wider text-[10px] mb-1">PRs being shipped now</div>
-                <div className="font-mono">{prNumbers.join(' · ')}</div>
+                <div className="font-semibold uppercase tracking-wider text-[10px] mb-1">Rolls being shipped now ({rolls.length} · {yardsBeingShipped} yds)</div>
+                <div className="font-mono flex flex-wrap gap-x-2">
+                  {rolls.map((r) => (<span key={r.id}>{r.roll_number} ({r.yards}yd)</span>))}
+                </div>
               </div>
               <div className="text-[11px] text-gray-500 italic">
-                The system will log this as a partial shipment. The parent order's status will stay open. An audit event is recorded with the operator + PRs + timestamp.
+                Logged as a partial shipment. Parent order status stays open. Audit event recorded with operator + roll #s + timestamp.
               </div>
             </div>
             <div className="px-5 py-3 border-t border-gray-200 flex items-center justify-end gap-2">

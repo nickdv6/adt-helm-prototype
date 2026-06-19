@@ -322,7 +322,6 @@ CREATE TABLE IF NOT EXISTS print_requests (
   rip_recalled INTEGER NOT NULL DEFAULT 0,
   rip_recall_acknowledged_at TEXT,
   assigned_to_user_id INTEGER, -- Currently responsible owner (colorist / print op / etc.). Drives 'Assigned To' filter on dashboards.
-  roll_number TEXT,            -- Roll identifier printed onto the fabric leader (parent QR). Surfaced on shipping/packing UIs and used for search + backtracking.
   strike_off_classification TEXT, -- inherited from Order Line; editable
   colorist_user_id INTEGER,
   is_click_and_print INTEGER NOT NULL DEFAULT 0,
@@ -345,6 +344,30 @@ CREATE TABLE IF NOT EXISTS print_requests (
   FOREIGN KEY (colorist_user_id) REFERENCES users(id),
   FOREIGN KEY (internal_proof_resolved_by_user_id) REFERENCES users(id)
 );
+
+-- ============================================================
+-- PR ROLLS — each row is one physical roll cut from a PR's printed yardage
+-- ============================================================
+-- A single PR may yield multiple rolls (overage/underage normal). Rolls are
+-- ONLY created at pack-out time, not at print time. Roll numbers are surfaced
+-- only on the Shipping page + roll registry + packing-correction UI.
+CREATE TABLE IF NOT EXISTS pr_rolls (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  pr_id INTEGER NOT NULL,
+  roll_number TEXT NOT NULL UNIQUE,
+  yards REAL NOT NULL,
+  packed_at TEXT,
+  packed_by_user_id INTEGER,
+  ship_status TEXT NOT NULL DEFAULT 'packed', -- packed | shipped
+  shipped_at TEXT,
+  shipment_id INTEGER,                        -- back-ref to the shipment that took this roll out the door
+  notes TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (pr_id) REFERENCES print_requests(id),
+  FOREIGN KEY (packed_by_user_id) REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS idx_pr_rolls_pr_id ON pr_rolls(pr_id);
+CREATE INDEX IF NOT EXISTS idx_pr_rolls_roll_number ON pr_rolls(roll_number);
 
 -- ============================================================
 -- STRIKE-OFF (14 statuses incl. 'Approved with Changes')

@@ -4,8 +4,10 @@ import { Card, Button, StatusPill, Tag } from '@/components/ui';
 import { formatPromised } from '@/lib/utils';
 
 // /print-requests — Print Request Dashboard
-// PR is the daily operational unit. Includes search + filter so users can quickly find a PR by
-// PR#, Roll#, or customer company name. Filters: status, assigned-to, attention queues.
+// PR is the daily operational unit. Search + filter so users can quickly find a PR by PR# or
+// customer company name. Roll #s are NOT shown here — rolls are pack-out-time artifacts and
+// are surfaced only on the Shipping page (where each PR may yield multiple rolls).
+// Filters: status, assigned-to, attention queues.
 
 const FINISHED_PR_STATUSES = new Set(['Complete', 'Cancelled']);
 const PROCESS_LABEL: Record<string, string> = {
@@ -50,11 +52,12 @@ export default function PrintRequestDashboard({ searchParams }: { searchParams: 
     where = "pr.status = 'On Hold'";
   }
 
-  // Free-text search: PR#, Roll#, or Customer company name
+  // Free-text search: PR# or Customer company name. Roll# is intentionally NOT searched here
+  // (rolls are pack-out-time artifacts surfaced only on Shipping + Created Rolls pages).
   const searchParams2: any[] = [];
   if (q) {
-    where += ` AND (pr.pr_number LIKE ? OR pr.roll_number LIKE ? OR c.name LIKE ?)`;
-    searchParams2.push(`%${q}%`, `%${q}%`, `%${q}%`);
+    where += ` AND (pr.pr_number LIKE ? OR c.name LIKE ?)`;
+    searchParams2.push(`%${q}%`, `%${q}%`);
   }
   if (statusFilter !== 'all') {
     where += ` AND pr.status = ?`;
@@ -68,7 +71,7 @@ export default function PrintRequestDashboard({ searchParams }: { searchParams: 
   const prs = db.prepare(`
     SELECT pr.id, pr.pr_number, pr.status, pr.planned_yardage, pr.printed_yardage,
            pr.is_click_and_print, pr.was_csv_auto_routed, pr.internal_proof_status,
-           pr.reprint_of_pr_id, pr.print_process, pr.roll_number,
+           pr.reprint_of_pr_id, pr.print_process,
            ol.order_id,
            o.order_number, o.adt_promised_date, o.estimated_ship_date,
            o.is_rush, o.status as order_status,
@@ -147,7 +150,7 @@ export default function PrintRequestDashboard({ searchParams }: { searchParams: 
               type="text"
               name="q"
               defaultValue={q}
-              placeholder="PR#, Roll#, or customer company…"
+              placeholder="PR# or customer company…"
               className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm"
             />
           </div>
@@ -201,7 +204,6 @@ export default function PrintRequestDashboard({ searchParams }: { searchParams: 
               <th className="text-left px-3 py-2.5">PR / Order</th>
               <th className="text-left px-3 py-2.5">Design / Colorway / Fabric</th>
               <th className="text-left px-3 py-2.5">Process</th>
-              <th className="text-left px-3 py-2.5">Roll #</th>
               <th className="text-left px-3 py-2.5">Status</th>
               <th className="text-right px-3 py-2.5">Progress</th>
               <th className="text-left px-3 py-2.5">Assigned To</th>
@@ -210,7 +212,7 @@ export default function PrintRequestDashboard({ searchParams }: { searchParams: 
           </thead>
           <tbody>
             {prs.length === 0 && (
-              <tr><td colSpan={9} className="text-center py-12 text-gray-400">No print requests match these filters.</td></tr>
+              <tr><td colSpan={8} className="text-center py-12 text-gray-400">No print requests match these filters.</td></tr>
             )}
             {prs.map((pr) => <PRRow key={pr.id} pr={pr} />)}
           </tbody>
@@ -277,14 +279,6 @@ function PRRow({ pr }: { pr: any }) {
 
       <td className="px-3 py-2.5">
         {processLabel ? <Tag color={processColor}>{processLabel}</Tag> : <span className="text-gray-400 text-xs">—</span>}
-      </td>
-
-      <td className="px-3 py-2.5 font-mono text-xs">
-        {pr.roll_number ? (
-          <span className="text-navy-700 font-semibold">{pr.roll_number}</span>
-        ) : (
-          <span className="text-gray-400 italic">not yet</span>
-        )}
       </td>
 
       <td className="px-3 py-2.5">

@@ -4,22 +4,25 @@ import { Card, CardHeader, StatusPill, Tag, Button } from '@/components/ui';
 import { formatDate, formatPromised } from '@/lib/utils';
 import { ShippingOrderRow } from '@/components/shipping-order-row';
 
-// Pack & Ship — expandable orders with per-PR ship + partial-ship confirmation.
+// Pack & Ship — expandable orders showing per-PR rolls (each PR may have many).
+// Roll #s are pack-out-time artifacts, surfaced ONLY here on the Shipping page.
 // Supports search by Order # / PO # / Customer / Roll #.
-// Three shipment paths distinguished: Complete order / Partial / Individual PR.
+// Three shipment paths distinguished: Complete order / Partial / Individual roll.
 
 export default function Shipping({ searchParams }: { searchParams: { tab?: string; q?: string } }) {
   const db = getDb();
   const tab = searchParams?.tab ?? 'ready';
   const q = (searchParams?.q ?? '').trim();
 
-  // Build the Ready-to-Ship query with optional search across order #, PO #, customer name, OR roll #
+  // Ready-to-Ship search hits order #, PO #, customer name, OR roll # (subquery into pr_rolls).
   let readyWhere = "o.status = 'Ready to Ship'";
   const readyParams: any[] = [];
   if (q) {
     readyWhere += ` AND (o.order_number LIKE ? OR o.po_number LIKE ? OR c.name LIKE ?
-                          OR EXISTS (SELECT 1 FROM print_requests pr2 JOIN order_lines ol2 ON pr2.order_line_id = ol2.id
-                                     WHERE ol2.order_id = o.id AND pr2.roll_number LIKE ?))`;
+                          OR EXISTS (SELECT 1 FROM pr_rolls r2
+                                     JOIN print_requests pr2 ON r2.pr_id = pr2.id
+                                     JOIN order_lines ol2 ON pr2.order_line_id = ol2.id
+                                     WHERE ol2.order_id = o.id AND r2.roll_number LIKE ?))`;
     readyParams.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
   }
   const readyToShip = db.prepare(`
@@ -31,11 +34,11 @@ export default function Shipping({ searchParams }: { searchParams: { tab?: strin
     ORDER BY o.is_rush DESC, date(o.adt_promised_date) ASC LIMIT 30
   `).all(...readyParams) as any[];
 
-  // Pull child PRs for the expandable section
+  // Pull child PRs + their packed rolls for the expandable section
   const orderIds = readyToShip.map((o) => o.id);
   const prsRaw = orderIds.length > 0
     ? db.prepare(`
-        SELECT pr.id, pr.pr_number, pr.roll_number, pr.status, pr.planned_yardage, pr.printed_yardage,
+        SELECT pr.id, pr.pr_number, pr.status, pr.planned_yardage, pr.printed_yardage,
                ol.order_id, d.name as design_name, cw.name as colorway_name
         FROM print_requests pr
         JOIN order_lines ol ON pr.order_line_id = ol.id
@@ -45,6 +48,22 @@ export default function Shipping({ searchParams }: { searchParams: { tab?: strin
         ORDER BY pr.pr_number
       `).all(...orderIds) as any[]
     : [];
+  const prIds = prsRaw.map((pr) => pr.id);
+  const rollsRaw = prIds.length > 0
+    ? db.prepare(`
+        SELECT id, pr_id, roll_number, yards, ship_status, packed_at, shipped_at
+        FROM pr_rolls
+        WHERE pr_id IN (${prIds.map(() => '?').join(',')})
+        ORDER BY CAST(roll_number AS INTEGER) ASC
+      `).all(...prIds) as any[]
+    : [];
+  const rollsByPR = new Map<number, any[]>();
+  rollsRaw.forEach((r) => {
+    if (!rollsByPR.has(r.pr_id)) rollsByPR.set(r.pr_id, []);
+    rollsByPR.get(r.pr_id)!.push(r);
+  });
+  // Attach rolls onto each PR
+  prsRaw.forEach((pr) => { pr.rolls = rollsByPR.get(pr.id) || []; });
   const prsByOrder = new Map<number, any[]>();
   prsRaw.forEach((pr) => {
     if (!prsByOrder.has(pr.order_id)) prsByOrder.set(pr.order_id, []);
@@ -151,7 +170,7 @@ export default function Shipping({ searchParams }: { searchParams: { tab?: strin
               </tbody>
             </table>
             <div className="px-4 py-2 border-t border-gray-100 text-[11px] text-gray-500 italic">
-              <strong>Three shipment paths:</strong> "Ship full order" ships everything · "Ship selected" with all PRs checked also ships everything (no prompt) · partial selections OR "Ship just this PR" on a multi-PR order trigger the confirmation prompt and log a partial shipment. Parent order stays open until remaining PRs ship.
+              <strong>Three shipment paths:</strong> "Ship full order" ships every packed roll across every PR · "Ship selected" with all rolls checked also ships everything (no prompt) · partial selections OR "Ship just this roll" on a multi-roll order trigger the confirmation prompt and log a partial shipment. <strong>Each PR may yield multiple rolls</strong> (overage/underage normal — e.g. a 500-yard PR may pack out as 99, 100, 101, 102, 106 yd rolls). Roll #s are assigned at pack-out and shown only here.
             </div>
           </Card>
         </>
