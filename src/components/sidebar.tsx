@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Home, FileText, Layers, Truck, Package, Palette, Printer, Scissors, Settings, Users, Inbox, AlertTriangle, Boxes, Flame, Sliders, FileScan, ClipboardList } from 'lucide-react';
+import { Home, FileText, Layers, Truck, Package, Palette, Printer, Scissors, Settings, Users, Inbox, AlertTriangle, Boxes, Flame, Sliders, FileScan, ClipboardList, CircleDot, Undo2 } from 'lucide-react';
 
 export function Sidebar() {
   return (
@@ -28,10 +28,12 @@ export function Sidebar() {
         <Section label="Fulfillment" />
         <NavItem href="/shipping" icon={<Truck className="w-4 h-4" />} label="Shipping" />
         <NavItem href="/fulfillment-requests" icon={<Boxes className="w-4 h-4" />} label="Fulfillment Requests" />
+        <NavItem href="/rolls" icon={<CircleDot className="w-4 h-4" />} label="Created Rolls" />
         <NavItem href="/inventory" icon={<Package className="w-4 h-4" />} label="Inventory" />
 
         <Section label="Operations" />
         <NavItem href="/exceptions" icon={<AlertTriangle className="w-4 h-4" />} label="Exception Center" badge="6" />
+        <NavItem href="/packing-correction" icon={<Undo2 className="w-4 h-4" />} label="Packing Correction" />
 
         <Section label="Admin" />
         <NavItem href="/customers" icon={<Users className="w-4 h-4" />} label="Customers" />

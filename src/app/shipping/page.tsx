@@ -1,26 +1,55 @@
 import Link from 'next/link';
 import { getDb } from '@/lib/db';
 import { Card, CardHeader, StatusPill, Tag, Button } from '@/components/ui';
-import { formatDate, relativeTime } from '@/lib/utils';
+import { formatDate, formatPromised } from '@/lib/utils';
+import { ShippingOrderRow } from '@/components/shipping-order-row';
 
-// S35 Pack-and-Ship (Lucio / Finishing)
-// Per Decision: auto-rate at Ready-to-Ship → carrier label printed → tracked
-// Per S35-S36.35: 3rd-party billing surfaced (carrier account # shown; no ADT-billed freight line)
-// Per Megan B4: 3rd-party billed shipments treated separately
-// S35b Returns dashboard appended below
+// Pack & Ship — expandable orders with per-PR ship + partial-ship confirmation.
+// Supports search by Order # / PO # / Customer / Roll #.
+// Three shipment paths distinguished: Complete order / Partial / Individual PR.
 
-export default function Shipping({ searchParams }: { searchParams: { tab?: string } }) {
+export default function Shipping({ searchParams }: { searchParams: { tab?: string; q?: string } }) {
   const db = getDb();
   const tab = searchParams?.tab ?? 'ready';
+  const q = (searchParams?.q ?? '').trim();
 
+  // Build the Ready-to-Ship query with optional search across order #, PO #, customer name, OR roll #
+  let readyWhere = "o.status = 'Ready to Ship'";
+  const readyParams: any[] = [];
+  if (q) {
+    readyWhere += ` AND (o.order_number LIKE ? OR o.po_number LIKE ? OR c.name LIKE ?
+                          OR EXISTS (SELECT 1 FROM print_requests pr2 JOIN order_lines ol2 ON pr2.order_line_id = ol2.id
+                                     WHERE ol2.order_id = o.id AND pr2.roll_number LIKE ?))`;
+    readyParams.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+  }
   const readyToShip = db.prepare(`
-    SELECT o.id, o.order_number, c.name as company_name, o.adt_promised_date,
+    SELECT o.id, o.order_number, o.po_number, c.name as company_name, o.adt_promised_date,
            o.is_rush, o.is_blind_ship, c.is_third_party_billed,
            c.carrier_account_carrier, c.carrier_account_number
     FROM orders o JOIN companies c ON o.company_id = c.id
-    WHERE o.status = 'Ready to Ship'
+    WHERE ${readyWhere}
     ORDER BY o.is_rush DESC, date(o.adt_promised_date) ASC LIMIT 30
-  `).all() as any[];
+  `).all(...readyParams) as any[];
+
+  // Pull child PRs for the expandable section
+  const orderIds = readyToShip.map((o) => o.id);
+  const prsRaw = orderIds.length > 0
+    ? db.prepare(`
+        SELECT pr.id, pr.pr_number, pr.roll_number, pr.status, pr.planned_yardage, pr.printed_yardage,
+               ol.order_id, d.name as design_name, cw.name as colorway_name
+        FROM print_requests pr
+        JOIN order_lines ol ON pr.order_line_id = ol.id
+        LEFT JOIN designs d ON ol.design_id = d.id
+        LEFT JOIN colorways cw ON ol.colorway_id = cw.id
+        WHERE ol.order_id IN (${orderIds.map(() => '?').join(',')})
+        ORDER BY pr.pr_number
+      `).all(...orderIds) as any[]
+    : [];
+  const prsByOrder = new Map<number, any[]>();
+  prsRaw.forEach((pr) => {
+    if (!prsByOrder.has(pr.order_id)) prsByOrder.set(pr.order_id, []);
+    prsByOrder.get(pr.order_id)!.push(pr);
+  });
 
   const recentShipped = db.prepare(`
     SELECT o.id, o.order_number, c.name as company_name, o.adt_promised_date,
@@ -58,47 +87,74 @@ export default function Shipping({ searchParams }: { searchParams: { tab?: strin
       </div>
 
       {tab === 'ready' && (
-        <Card>
-          <CardHeader title="Ready to Ship Queue" subtitle="Auto-rated · click to print label" />
-          <table className="w-full text-sm">
-            <thead className="text-xs text-gray-500 uppercase tracking-wider border-b border-gray-200">
-              <tr>
-                <th className="text-left px-4 py-2.5">Order #</th>
-                <th className="text-left px-4 py-2.5">Customer</th>
-                <th className="text-left px-4 py-2.5">Promised</th>
-                <th className="text-left px-4 py-2.5">Flags</th>
-                <th className="text-left px-4 py-2.5">Billing</th>
-                <th className="text-right px-4 py-2.5 pr-5">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {readyToShip.length === 0 && (
-                <tr><td colSpan={6} className="text-center py-10 text-gray-400">Queue is clear.</td></tr>
-              )}
-              {readyToShip.map((o) => (
-                <tr key={o.id} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-2.5">
-                    <Link href={`/orders/${o.id}`} className="font-mono text-navy-700 hover:underline font-semibold">{o.order_number}</Link>
-                  </td>
-                  <td className="px-4 py-2.5">{o.company_name}</td>
-                  <td className="px-4 py-2.5 text-xs">{formatDate(o.adt_promised_date)}</td>
-                  <td className="px-4 py-2.5">
-                    {o.is_rush ? <Tag color="red">Rush</Tag> : null}
-                    {o.is_blind_ship ? <Tag color="green">Blind</Tag> : null}
-                  </td>
-                  <td className="px-4 py-2.5 text-xs">
-                    {o.is_third_party_billed
-                      ? <Tag color="yellow">3rd-Party · {o.carrier_account_carrier} #{o.carrier_account_number}</Tag>
-                      : <span className="text-gray-500">ADT account</span>}
-                  </td>
-                  <td className="px-4 py-2.5 text-right pr-5">
-                    <Button variant="secondary">Auto-Rate + Print</Button>
-                  </td>
+        <>
+          {/* Search bar — Order #, PO #, customer company, or roll # */}
+          <Card>
+            <form className="p-4 flex items-end gap-3" action="/shipping">
+              <input type="hidden" name="tab" value="ready" />
+              <div className="flex-1">
+                <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-1">Search</label>
+                <input
+                  type="text"
+                  name="q"
+                  defaultValue={q}
+                  placeholder="Order #, PO #, customer company, or roll #…"
+                  className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm"
+                />
+              </div>
+              <Button size="sm" type="submit">Search</Button>
+              {q && <Link href="/shipping?tab=ready" className="px-3 py-1.5 text-xs text-gray-500 hover:text-navy-700 border border-gray-300 rounded">Clear</Link>}
+            </form>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="Ready to Ship Queue"
+              subtitle="Click chevron to expand and ship individual PRs · partial shipments prompt for confirmation"
+            />
+            <table className="w-full text-sm">
+              <thead className="text-xs text-gray-500 uppercase tracking-wider border-b border-gray-200">
+                <tr>
+                  <th className="px-3 py-2.5 w-8"></th>
+                  <th className="text-left px-3 py-2.5">Order #</th>
+                  <th className="text-left px-3 py-2.5">Customer</th>
+                  <th className="text-left px-3 py-2.5">Promised</th>
+                  <th className="text-left px-3 py-2.5">Flags / PRs</th>
+                  <th className="text-left px-3 py-2.5">Billing</th>
+                  <th className="text-right px-3 py-2.5 pr-3">Action</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+              </thead>
+              <tbody>
+                {readyToShip.length === 0 && (
+                  <tr><td colSpan={7} className="text-center py-10 text-gray-400">Queue is clear.</td></tr>
+                )}
+                {readyToShip.map((o) => {
+                  const promised = formatPromised(o.adt_promised_date);
+                  return (
+                    <ShippingOrderRow
+                      key={o.id}
+                      order={{
+                        id: o.id,
+                        order_number: o.order_number,
+                        company_name: o.company_name,
+                        promised_label: promised.label,
+                        is_rush: o.is_rush,
+                        is_blind_ship: o.is_blind_ship,
+                        is_third_party_billed: o.is_third_party_billed,
+                        carrier_account_carrier: o.carrier_account_carrier,
+                        carrier_account_number: o.carrier_account_number,
+                      }}
+                      prs={prsByOrder.get(o.id) || []}
+                    />
+                  );
+                })}
+              </tbody>
+            </table>
+            <div className="px-4 py-2 border-t border-gray-100 text-[11px] text-gray-500 italic">
+              <strong>Three shipment paths:</strong> "Ship full order" ships everything · "Ship selected" with all PRs checked also ships everything (no prompt) · partial selections OR "Ship just this PR" on a multi-PR order trigger the confirmation prompt and log a partial shipment. Parent order stays open until remaining PRs ship.
+            </div>
+          </Card>
+        </>
       )}
 
       {tab === 'shipped' && (
