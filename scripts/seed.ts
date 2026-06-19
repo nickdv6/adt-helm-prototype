@@ -247,10 +247,10 @@ console.log('Seeding orders + lines + PRs (last 18 months)...');
 const insOrder = db.prepare(`
   INSERT INTO orders (order_number, company_id, primary_contact_id, ship_to_address_id, roadmap,
     status, customer_facing_status, customer_requested_date, estimated_ship_date, adt_promised_date,
-    po_number, source_system, primary_csr_user_id, subtotal, is_blind_ship, is_rush,
+    po_number, source_system, primary_csr_user_id, assigned_to_user_id, subtotal, is_blind_ship, is_rush,
     approval_required, trigger_reason, trigger_source, approval_completed_at, approved_by_user_id,
     is_legacy, created_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
 // Pre-approval statuses get an Estimated Ship Date only. ADT does not commit to a Promised
@@ -267,8 +267,9 @@ const insPR = db.prepare(`
   INSERT INTO print_requests (pr_number, order_line_id, printer_id, fabric_id, print_process, status,
     planned_yardage, printed_yardage, strike_off_classification, colorist_user_id,
     is_click_and_print, was_csv_auto_routed, internal_proof_status, internal_proof_requested_at,
-    internal_proof_resolved_at, internal_proof_resolved_by_user_id, hot_folder_target, scheduled_at, created_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    internal_proof_resolved_at, internal_proof_resolved_by_user_id, hot_folder_target, scheduled_at,
+    assigned_to_user_id, roll_number, created_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
 const orderStatuses: { status: string; cfs: string; weight: number }[] = [
@@ -344,6 +345,17 @@ for (let i = 0; i < totalOrders; i++) {
   const source = faker.helpers.arrayElement(sourceSystems);
   const isShopify = source.startsWith('shopify');
 
+  // Assigned-To owner shifts with lifecycle stage. Drives dashboard filtering.
+  const orderAssignedTo = (() => {
+    if (['Draft', 'Validated', 'Waiting on Customer', 'Waiting on Artwork'].includes(ordStatus.status)) return userByRole['csr'];
+    if (ordStatus.status === 'Waiting on Approval') return userByRole['prod_mgr'];
+    if (['In Production', 'Partially Complete'].includes(ordStatus.status)) return userByRole['prod_mgr'];
+    if (['Ready to Ship'].includes(ordStatus.status)) return userByRole['finishing'];
+    if (['Shipped', 'Invoiced', 'Closed'].includes(ordStatus.status)) return userByRole['accounting'] ?? userByRole['csr'];
+    if (ordStatus.status === 'On Hold') return userByRole['prod_mgr'];
+    return userByRole['csr'];
+  })();
+
   const result = insOrder.run(
     orderNum,
     co.id,
@@ -358,6 +370,7 @@ for (let i = 0; i < totalOrders; i++) {
     isShopify ? null : `PO-${faker.string.alphanumeric(8).toUpperCase()}`,
     source,
     userByRole['csr'],
+    orderAssignedTo,
     subtotal,
     co.is_third_party_billed ?? 0,
     isRush,
@@ -408,6 +421,23 @@ for (let i = 0; i < totalOrders; i++) {
                                  : prStatus === 'Pending Internal Proof' ? 'pending'
                                  : ['Ready for Scheduling', 'Scheduled', 'Printing', 'Printed', 'Complete'].includes(prStatus) ? 'approved'
                                  : 'not_required';
+    // Assigned-To owner for the PR shifts with stage (colorist while in proof, print_op once
+    // scheduled, finishing after printed, etc.)
+    const prAssignedTo = (() => {
+      if (['Draft', 'Pending Internal Proof'].includes(prStatus)) {
+        return classification.includes('Customer') || internalProofStatus === 'pending'
+          ? userByRole['colorist'] : userByRole['csr'];
+      }
+      if (['Ready for Scheduling', 'Scheduled', 'Printing'].includes(prStatus)) return userByRole['print_op'];
+      if (prStatus === 'Printed') return userByRole['finishing'];
+      if (prStatus === 'Complete') return userByRole['shipping'] ?? userByRole['finishing'];
+      return userByRole['csr'];
+    })();
+    // Roll number assigned once the PR has reached at least Printing — represents the physical roll
+    // the fabric was printed onto. Hex-style identifier matches the Parent QR pattern used elsewhere.
+    const rollNumber = ['Printing', 'Printed', 'Complete'].includes(prStatus)
+      ? `R-${faker.string.alphanumeric(6).toUpperCase()}`
+      : null;
     insPR.run(
       `PR-${prCounter++}`, lineId, printer.id, sku.fabric_id,
       printer.ink_set.toLowerCase().replace(/ /g, '_'),
@@ -421,6 +451,8 @@ for (let i = 0; i < totalOrders; i++) {
       isAutoRouted ? `\\\\hot-folder-${printer.id}\\${sku.product_type}` : null,
       ['Scheduled', 'Printing', 'Printed', 'Complete'].includes(prStatus)
         ? faker.date.recent({ days: 3 }).toISOString() : null,
+      prAssignedTo,
+      rollNumber,
       createdAt,
     );
   }

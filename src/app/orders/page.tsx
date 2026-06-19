@@ -3,13 +3,14 @@ import { getDb } from '@/lib/db';
 import { Card, Button } from '@/components/ui';
 import { OrderRow } from '@/components/order-row';
 
-// Order Dashboard — compact, scannable order list.
-// Priority encoded as a left-edge color stripe. PR-mix summary inline (no expand needed).
-// Child PR details live on the Order Detail page.
+// Order Dashboard — compact, scannable. Search + filter for status + assigned-to.
 
-export default function OrderDashboard({ searchParams }: { searchParams: { filter?: string } }) {
+export default function OrderDashboard({ searchParams }: { searchParams: { filter?: string; q?: string; status?: string; assigned?: string } }) {
   const db = getDb();
   const filter = searchParams?.filter ?? 'all';
+  const q = (searchParams?.q ?? '').trim();
+  const statusFilter = searchParams?.status ?? 'all';
+  const assignedFilter = searchParams?.assigned ?? 'all';
 
   let where = '1=1';
   if (filter === 'today') where = "date(o.adt_promised_date) = date('now')";
@@ -20,13 +21,25 @@ export default function OrderDashboard({ searchParams }: { searchParams: { filte
   if (filter === 'credit_hold') where = "EXISTS (SELECT 1 FROM companies c2 WHERE c2.id = o.company_id AND c2.is_credit_hold = 1)";
   if (filter === 'rush') where = "o.is_rush = 1 AND o.status NOT IN ('Closed','Shipped','Invoiced','Cancelled')";
 
-  // Sort by priority. Late is only computable against adt_promised_date — pre-approval orders
-  // (those with no promised date yet) cannot be Late by definition. Their Estimated Ship Date
-  // is provisional and not a commitment.
+  const params: any[] = [];
+  if (q) {
+    where += ` AND (o.order_number LIKE ? OR o.po_number LIKE ? OR c.name LIKE ?)`;
+    params.push(`%${q}%`, `%${q}%`, `%${q}%`);
+  }
+  if (statusFilter !== 'all') {
+    where += ` AND o.status = ?`;
+    params.push(statusFilter);
+  }
+  if (assignedFilter !== 'all') {
+    where += ` AND o.assigned_to_user_id = ?`;
+    params.push(parseInt(assignedFilter));
+  }
+
   const orders = db.prepare(`
     SELECT o.id, o.order_number, o.po_number, c.name as company_name, o.roadmap, o.status,
            o.estimated_ship_date, o.adt_promised_date, o.created_at, o.is_rush,
            o.approval_required, o.trigger_reason,
+           u.full_name as assigned_to_name,
            CASE
              WHEN o.adt_promised_date IS NOT NULL
                   AND date(o.adt_promised_date) < date('now')
@@ -35,14 +48,17 @@ export default function OrderDashboard({ searchParams }: { searchParams: { filte
              WHEN o.status IN ('On Hold','Waiting on Approval') THEN 2
              ELSE 3
            END as priority_rank
-    FROM orders o JOIN companies c ON o.company_id = c.id
+    FROM orders o
+    JOIN companies c ON o.company_id = c.id
+    LEFT JOIN users u ON o.assigned_to_user_id = u.id
     WHERE ${where}
     ORDER BY priority_rank ASC,
              COALESCE(date(o.adt_promised_date), date(o.estimated_ship_date)) ASC,
              o.created_at DESC
-    LIMIT 50
-  `).all() as any[];
+    LIMIT 75
+  `).all(...params) as any[];
 
+  // Pull child PR summaries
   const orderIds = orders.map((o) => o.id);
   const placeholders = orderIds.map(() => '?').join(',');
   const prsRaw = orderIds.length > 0
@@ -59,6 +75,14 @@ export default function OrderDashboard({ searchParams }: { searchParams: { filte
     prsByOrder.get(pr.order_id)!.push(pr);
   });
 
+  // Filter dropdown options
+  const allStatuses = db.prepare(`SELECT DISTINCT status FROM orders WHERE status IS NOT NULL ORDER BY status`).all() as { status: string }[];
+  const allAssignees = db.prepare(`
+    SELECT DISTINCT u.id, u.full_name FROM users u
+    JOIN orders o ON o.assigned_to_user_id = u.id
+    ORDER BY u.full_name
+  `).all() as { id: number; full_name: string }[];
+
   const counts = {
     all: (db.prepare('SELECT COUNT(*) as c FROM orders').get() as any).c,
     today: (db.prepare("SELECT COUNT(*) as c FROM orders o WHERE date(o.adt_promised_date) = date('now')").get() as any).c,
@@ -69,16 +93,7 @@ export default function OrderDashboard({ searchParams }: { searchParams: { filte
     rush: (db.prepare("SELECT COUNT(*) as c FROM orders WHERE is_rush = 1 AND status NOT IN ('Closed','Shipped','Invoiced','Cancelled')").get() as any).c,
   };
 
-  // Active filter label for header context
-  const activeLabel = ({
-    all: 'all orders',
-    today: 'orders promised today',
-    this_week: 'orders promised this week',
-    late: 'late orders',
-    on_hold: 'orders on hold',
-    awaiting_approval: 'orders awaiting approval',
-    rush: 'rush orders',
-  } as Record<string, string>)[filter] || 'orders';
+  const hasFilters = q || statusFilter !== 'all' || assignedFilter !== 'all' || filter !== 'all';
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
@@ -86,7 +101,7 @@ export default function OrderDashboard({ searchParams }: { searchParams: { filte
         <div>
           <h1 className="text-2xl font-bold text-navy-900">Order Dashboard</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Showing {orders.length} of {counts.all} {activeLabel} · sorted by priority (late first)
+            Showing {orders.length} orders{hasFilters ? ' matching filters' : ''} · sorted by priority (late first)
           </p>
         </div>
         <Link href="/orders/new">
@@ -94,21 +109,58 @@ export default function OrderDashboard({ searchParams }: { searchParams: { filte
         </Link>
       </header>
 
-      {/* Filter chips — grouped Time vs Needs Attention */}
+      {/* Search + filter bar */}
+      <Card>
+        <form className="p-4 grid grid-cols-12 gap-3 items-end" action="/orders">
+          {filter !== 'all' && <input type="hidden" name="filter" value={filter} />}
+          <div className="col-span-5">
+            <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-1">Search</label>
+            <input
+              type="text"
+              name="q"
+              defaultValue={q}
+              placeholder="Order #, PO #, or customer company…"
+              className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm"
+            />
+          </div>
+          <div className="col-span-3">
+            <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-1">Status</label>
+            <select name="status" defaultValue={statusFilter} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm bg-white">
+              <option value="all">All statuses</option>
+              {allStatuses.map((s) => <option key={s.status} value={s.status}>{s.status}</option>)}
+            </select>
+          </div>
+          <div className="col-span-3">
+            <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-1">Assigned To</label>
+            <select name="assigned" defaultValue={assignedFilter} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm bg-white">
+              <option value="all">Anyone</option>
+              {allAssignees.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+            </select>
+          </div>
+          <div className="col-span-1 flex gap-1.5">
+            <Button size="sm" type="submit" className="w-full">Search</Button>
+            {hasFilters && (
+              <Link href="/orders" className="px-2 py-1.5 text-xs text-gray-500 hover:text-navy-700 border border-gray-300 rounded">Clear</Link>
+            )}
+          </div>
+        </form>
+      </Card>
+
+      {/* Attention chips */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex flex-wrap items-center gap-1.5">
           <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mr-1">Time</div>
-          <FilterChip label="All" filter="all" current={filter} count={counts.all} />
-          <FilterChip label="Today" filter="today" current={filter} count={counts.today} />
-          <FilterChip label="This week" filter="this_week" current={filter} count={counts.this_week} />
+          <FilterChip label="All" filter="all" current={filter} count={counts.all} q={q} status={statusFilter} assigned={assignedFilter} />
+          <FilterChip label="Today" filter="today" current={filter} count={counts.today} q={q} status={statusFilter} assigned={assignedFilter} />
+          <FilterChip label="This week" filter="this_week" current={filter} count={counts.this_week} q={q} status={statusFilter} assigned={assignedFilter} />
         </div>
         <span className="text-gray-300">·</span>
         <div className="flex flex-wrap items-center gap-1.5">
           <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mr-1">Needs attention</div>
-          <FilterChip label="Late" filter="late" current={filter} count={counts.late} accent="red" />
-          <FilterChip label="Rush" filter="rush" current={filter} count={counts.rush} accent="red" />
-          <FilterChip label="Awaiting approval" filter="awaiting_approval" current={filter} count={counts.awaiting_approval} accent="yellow" />
-          <FilterChip label="On hold" filter="on_hold" current={filter} count={counts.on_hold} accent="yellow" />
+          <FilterChip label="Late" filter="late" current={filter} count={counts.late} accent="red" q={q} status={statusFilter} assigned={assignedFilter} />
+          <FilterChip label="Rush" filter="rush" current={filter} count={counts.rush} accent="red" q={q} status={statusFilter} assigned={assignedFilter} />
+          <FilterChip label="Awaiting approval" filter="awaiting_approval" current={filter} count={counts.awaiting_approval} accent="yellow" q={q} status={statusFilter} assigned={assignedFilter} />
+          <FilterChip label="On hold" filter="on_hold" current={filter} count={counts.on_hold} accent="yellow" q={q} status={statusFilter} assigned={assignedFilter} />
         </div>
       </div>
 
@@ -121,12 +173,13 @@ export default function OrderDashboard({ searchParams }: { searchParams: { filte
               <th className="text-left px-3 py-2.5">Customer</th>
               <th className="text-left px-3 py-2.5">Roadmap</th>
               <th className="text-left px-3 py-2.5">Status</th>
-              <th className="text-left px-3 py-2.5">Promised / Est. ship</th>
+              <th className="text-left px-3 py-2.5">Assigned To</th>
+              <th className="text-left px-3 py-2.5">Promised / Est.</th>
             </tr>
           </thead>
           <tbody>
             {orders.length === 0 && (
-              <tr><td colSpan={6} className="text-center py-12 text-gray-400">No orders match this filter.</td></tr>
+              <tr><td colSpan={7} className="text-center py-12 text-gray-400">No orders match these filters.</td></tr>
             )}
             {orders.map((o) => (
               <OrderRow key={o.id} order={o} prs={prsByOrder.get(o.id) || []} />
@@ -138,7 +191,7 @@ export default function OrderDashboard({ searchParams }: { searchParams: { filte
   );
 }
 
-function FilterChip({ label, filter, current, count, accent }: { label: string; filter: string; current: string; count: number; accent?: 'red' | 'yellow' }) {
+function FilterChip({ label, filter, current, count, accent, q, status, assigned }: { label: string; filter: string; current: string; count: number; accent?: 'red' | 'yellow'; q?: string; status?: string; assigned?: string }) {
   const isActive = current === filter;
   let cls = '';
   if (isActive) {
@@ -150,8 +203,13 @@ function FilterChip({ label, filter, current, count, accent }: { label: string; 
   } else {
     cls = 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50';
   }
+  const params = new URLSearchParams();
+  params.set('filter', filter);
+  if (q) params.set('q', q);
+  if (status && status !== 'all') params.set('status', status);
+  if (assigned && assigned !== 'all') params.set('assigned', assigned);
   return (
-    <Link href={`/orders?filter=${filter}`}
+    <Link href={`/orders?${params.toString()}`}
       className={`px-3 py-1 text-xs font-semibold rounded-full border transition-colors ${cls}`}>
       {label} <span className="ml-1 opacity-70 font-normal">{count}</span>
     </Link>

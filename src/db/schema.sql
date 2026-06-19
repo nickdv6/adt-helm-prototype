@@ -257,6 +257,7 @@ CREATE TABLE IF NOT EXISTS orders (
   po_number TEXT,
   source_system TEXT NOT NULL DEFAULT 'manual', -- manual | shopify_advdigitaltextiles | shopify_fabricondemand | csv_import_st_frank | csv_import_inside | csv_import_lemieux | csv_import_laura_park | xml_import_fabric_megastore
   primary_csr_user_id INTEGER,
+  assigned_to_user_id INTEGER, -- Currently responsible owner (may be reassigned through lifecycle). Drives 'Assigned To' filter on dashboards.
   subtotal REAL,
   is_blind_ship INTEGER NOT NULL DEFAULT 0,
   is_rush INTEGER NOT NULL DEFAULT 0,
@@ -320,6 +321,8 @@ CREATE TABLE IF NOT EXISTS print_requests (
   reprint_reason_code TEXT,
   rip_recalled INTEGER NOT NULL DEFAULT 0,
   rip_recall_acknowledged_at TEXT,
+  assigned_to_user_id INTEGER, -- Currently responsible owner (colorist / print op / etc.). Drives 'Assigned To' filter on dashboards.
+  roll_number TEXT,            -- Roll identifier printed onto the fabric leader (parent QR). Surfaced on shipping/packing UIs and used for search + backtracking.
   strike_off_classification TEXT, -- inherited from Order Line; editable
   colorist_user_id INTEGER,
   is_click_and_print INTEGER NOT NULL DEFAULT 0,

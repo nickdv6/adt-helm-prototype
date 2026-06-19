@@ -4,9 +4,8 @@ import { Card, Button, StatusPill, Tag } from '@/components/ui';
 import { formatPromised } from '@/lib/utils';
 
 // /print-requests — Print Request Dashboard
-// Per Nick: PRs are checked more frequently than Orders. This is the daily operational queue
-// at PR granularity, parallel to /orders but focused on production execution. Late and pre-
-// approval semantics inherit from the parent order (promised vs estimated ship date).
+// PR is the daily operational unit. Includes search + filter so users can quickly find a PR by
+// PR#, Roll#, or customer company name. Filters: status, assigned-to, attention queues.
 
 const FINISHED_PR_STATUSES = new Set(['Complete', 'Cancelled']);
 const PROCESS_LABEL: Record<string, string> = {
@@ -26,9 +25,12 @@ const PROCESS_COLOR: Record<string, 'blue' | 'purple' | 'green' | 'yellow' | 'gr
   other_manual_review: 'gray',
 };
 
-export default function PrintRequestDashboard({ searchParams }: { searchParams: { filter?: string } }) {
+export default function PrintRequestDashboard({ searchParams }: { searchParams: { filter?: string; q?: string; status?: string; assigned?: string } }) {
   const db = getDb();
   const filter = searchParams?.filter ?? 'all';
+  const q = (searchParams?.q ?? '').trim();
+  const statusFilter = searchParams?.status ?? 'all';
+  const assignedFilter = searchParams?.assigned ?? 'all';
 
   // WHERE clauses parallel to Orders Dashboard, applied against the parent order's promised date
   let where = '1=1';
@@ -48,10 +50,25 @@ export default function PrintRequestDashboard({ searchParams }: { searchParams: 
     where = "pr.status = 'On Hold'";
   }
 
+  // Free-text search: PR#, Roll#, or Customer company name
+  const searchParams2: any[] = [];
+  if (q) {
+    where += ` AND (pr.pr_number LIKE ? OR pr.roll_number LIKE ? OR c.name LIKE ?)`;
+    searchParams2.push(`%${q}%`, `%${q}%`, `%${q}%`);
+  }
+  if (statusFilter !== 'all') {
+    where += ` AND pr.status = ?`;
+    searchParams2.push(statusFilter);
+  }
+  if (assignedFilter !== 'all') {
+    where += ` AND pr.assigned_to_user_id = ?`;
+    searchParams2.push(parseInt(assignedFilter));
+  }
+
   const prs = db.prepare(`
     SELECT pr.id, pr.pr_number, pr.status, pr.planned_yardage, pr.printed_yardage,
            pr.is_click_and_print, pr.was_csv_auto_routed, pr.internal_proof_status,
-           pr.reprint_of_pr_id, pr.print_process,
+           pr.reprint_of_pr_id, pr.print_process, pr.roll_number,
            ol.order_id,
            o.order_number, o.adt_promised_date, o.estimated_ship_date,
            o.is_rush, o.status as order_status,
@@ -59,7 +76,7 @@ export default function PrintRequestDashboard({ searchParams }: { searchParams: 
            d.plant_number, d.name as design_name,
            cw.name as colorway_name,
            f.name as fabric_name,
-           p.name as printer_name,
+           u.full_name as assigned_to_name,
            CASE
              WHEN o.adt_promised_date IS NOT NULL
                   AND date(o.adt_promised_date) < date('now')
@@ -76,13 +93,21 @@ export default function PrintRequestDashboard({ searchParams }: { searchParams: 
     LEFT JOIN designs d ON ol.design_id = d.id
     LEFT JOIN colorways cw ON ol.colorway_id = cw.id
     LEFT JOIN fabrics f ON pr.fabric_id = f.id
-    LEFT JOIN printers p ON pr.printer_id = p.id
+    LEFT JOIN users u ON pr.assigned_to_user_id = u.id
     WHERE ${where}
     ORDER BY priority_rank ASC,
              COALESCE(date(o.adt_promised_date), date(o.estimated_ship_date)) ASC,
              pr.created_at DESC
     LIMIT 75
-  `).all() as any[];
+  `).all(...searchParams2) as any[];
+
+  // Distinct status + assignee lists for filter dropdowns
+  const allStatuses = db.prepare(`SELECT DISTINCT status FROM print_requests WHERE status IS NOT NULL ORDER BY status`).all() as { status: string }[];
+  const allAssignees = db.prepare(`
+    SELECT DISTINCT u.id, u.full_name FROM users u
+    JOIN print_requests pr ON pr.assigned_to_user_id = u.id
+    ORDER BY u.full_name
+  `).all() as { id: number; full_name: string }[];
 
   const counts = {
     all: (db.prepare('SELECT COUNT(*) as c FROM print_requests pr JOIN order_lines ol ON pr.order_line_id = ol.id JOIN orders o ON ol.order_id = o.id').get() as any).c,
@@ -95,16 +120,7 @@ export default function PrintRequestDashboard({ searchParams }: { searchParams: 
     held: (db.prepare("SELECT COUNT(*) as c FROM print_requests pr WHERE pr.status = 'On Hold'").get() as any).c,
   };
 
-  const activeLabel = ({
-    all: 'all print requests',
-    today: 'PRs on orders promised today',
-    this_week: 'PRs on orders promised this week',
-    late: 'late PRs',
-    proof_pending: 'PRs with proof pending',
-    rush: 'PRs on rush orders',
-    reprint: 'reprints',
-    held: 'PRs on hold',
-  } as Record<string, string>)[filter] || 'print requests';
+  const hasFilters = q || statusFilter !== 'all' || assignedFilter !== 'all' || filter !== 'all';
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
@@ -112,7 +128,7 @@ export default function PrintRequestDashboard({ searchParams }: { searchParams: 
         <div>
           <h1 className="text-2xl font-bold text-navy-900">Print Request Dashboard</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Showing {prs.length} of {counts.all} {activeLabel} · sorted by priority (late first)
+            Showing {prs.length} print requests{hasFilters ? ' matching filters' : ''} · sorted by priority (late first)
           </p>
         </div>
         <Link href="/printer-queue">
@@ -120,22 +136,60 @@ export default function PrintRequestDashboard({ searchParams }: { searchParams: 
         </Link>
       </header>
 
-      {/* Filter chips — Time vs Needs Attention */}
+      {/* Search + filter bar */}
+      <Card>
+        <form className="p-4 grid grid-cols-12 gap-3 items-end" action="/print-requests">
+          {/* Preserve the current attention filter via hidden field */}
+          {filter !== 'all' && <input type="hidden" name="filter" value={filter} />}
+          <div className="col-span-5">
+            <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-1">Search</label>
+            <input
+              type="text"
+              name="q"
+              defaultValue={q}
+              placeholder="PR#, Roll#, or customer company…"
+              className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm"
+            />
+          </div>
+          <div className="col-span-3">
+            <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-1">Status</label>
+            <select name="status" defaultValue={statusFilter} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm bg-white">
+              <option value="all">All statuses</option>
+              {allStatuses.map((s) => <option key={s.status} value={s.status}>{s.status}</option>)}
+            </select>
+          </div>
+          <div className="col-span-3">
+            <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-1">Assigned To</label>
+            <select name="assigned" defaultValue={assignedFilter} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm bg-white">
+              <option value="all">Anyone</option>
+              {allAssignees.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+            </select>
+          </div>
+          <div className="col-span-1 flex gap-1.5">
+            <Button size="sm" type="submit" className="w-full">Search</Button>
+            {hasFilters && (
+              <Link href="/print-requests" className="px-2 py-1.5 text-xs text-gray-500 hover:text-navy-700 border border-gray-300 rounded">Clear</Link>
+            )}
+          </div>
+        </form>
+      </Card>
+
+      {/* Attention chips */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex flex-wrap items-center gap-1.5">
           <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mr-1">Time</div>
-          <FilterChip label="All" filter="all" current={filter} count={counts.all} />
-          <FilterChip label="Today" filter="today" current={filter} count={counts.today} />
-          <FilterChip label="This week" filter="this_week" current={filter} count={counts.this_week} />
+          <FilterChip label="All" filter="all" current={filter} count={counts.all} q={q} status={statusFilter} assigned={assignedFilter} />
+          <FilterChip label="Today" filter="today" current={filter} count={counts.today} q={q} status={statusFilter} assigned={assignedFilter} />
+          <FilterChip label="This week" filter="this_week" current={filter} count={counts.this_week} q={q} status={statusFilter} assigned={assignedFilter} />
         </div>
         <span className="text-gray-300">·</span>
         <div className="flex flex-wrap items-center gap-1.5">
           <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mr-1">Needs attention</div>
-          <FilterChip label="Late" filter="late" current={filter} count={counts.late} accent="red" />
-          <FilterChip label="Rush" filter="rush" current={filter} count={counts.rush} accent="red" />
-          <FilterChip label="Proof pending" filter="proof_pending" current={filter} count={counts.proof_pending} accent="yellow" />
-          <FilterChip label="Reprint" filter="reprint" current={filter} count={counts.reprint} accent="yellow" />
-          <FilterChip label="On hold" filter="held" current={filter} count={counts.held} accent="yellow" />
+          <FilterChip label="Late" filter="late" current={filter} count={counts.late} accent="red" q={q} status={statusFilter} assigned={assignedFilter} />
+          <FilterChip label="Rush" filter="rush" current={filter} count={counts.rush} accent="red" q={q} status={statusFilter} assigned={assignedFilter} />
+          <FilterChip label="Proof pending" filter="proof_pending" current={filter} count={counts.proof_pending} accent="yellow" q={q} status={statusFilter} assigned={assignedFilter} />
+          <FilterChip label="Reprint" filter="reprint" current={filter} count={counts.reprint} accent="yellow" q={q} status={statusFilter} assigned={assignedFilter} />
+          <FilterChip label="On hold" filter="held" current={filter} count={counts.held} accent="yellow" q={q} status={statusFilter} assigned={assignedFilter} />
         </div>
       </div>
 
@@ -147,15 +201,16 @@ export default function PrintRequestDashboard({ searchParams }: { searchParams: 
               <th className="text-left px-3 py-2.5">PR / Order</th>
               <th className="text-left px-3 py-2.5">Design / Colorway / Fabric</th>
               <th className="text-left px-3 py-2.5">Process</th>
-              <th className="text-left px-3 py-2.5">Printer</th>
+              <th className="text-left px-3 py-2.5">Roll #</th>
               <th className="text-left px-3 py-2.5">Status</th>
               <th className="text-right px-3 py-2.5">Progress</th>
-              <th className="text-left px-3 py-2.5">Promised / Est. ship</th>
+              <th className="text-left px-3 py-2.5">Assigned To</th>
+              <th className="text-left px-3 py-2.5">Promised / Est.</th>
             </tr>
           </thead>
           <tbody>
             {prs.length === 0 && (
-              <tr><td colSpan={8} className="text-center py-12 text-gray-400">No print requests match this filter.</td></tr>
+              <tr><td colSpan={9} className="text-center py-12 text-gray-400">No print requests match these filters.</td></tr>
             )}
             {prs.map((pr) => <PRRow key={pr.id} pr={pr} />)}
           </tbody>
@@ -166,8 +221,6 @@ export default function PrintRequestDashboard({ searchParams }: { searchParams: 
 }
 
 function PRRow({ pr }: { pr: any }) {
-  // Priority computed from the parent order's promised date — pre-approval orders (no promised
-  // date) can never qualify as Late.
   const promised = pr.adt_promised_date ? new Date(pr.adt_promised_date) : null;
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const isLate = !!(promised && promised < today && !FINISHED_PR_STATUSES.has(pr.status));
@@ -193,12 +246,10 @@ function PRRow({ pr }: { pr: any }) {
 
   return (
     <tr className={`border-t border-gray-100 transition-colors ${rowBg}`}>
-      {/* Priority accent stripe */}
       <td className="p-0 w-1">
         {accent && <div className={`w-1 h-14 ${accentBg}`} />}
       </td>
 
-      {/* PR# + Plant# stacked over Order# + Customer */}
       <td className="px-3 py-2.5">
         <div className="flex items-center gap-2">
           <Link href={`/print-requests/${pr.id}`} className="font-mono text-navy-700 hover:underline font-semibold">
@@ -215,7 +266,6 @@ function PRRow({ pr }: { pr: any }) {
         </div>
       </td>
 
-      {/* Design / Colorway / Fabric stacked */}
       <td className="px-3 py-2.5">
         <div className="font-semibold">{pr.design_name || <span className="text-gray-400">—</span>}</div>
         <div className="text-[11px] text-gray-500">
@@ -225,17 +275,18 @@ function PRRow({ pr }: { pr: any }) {
         </div>
       </td>
 
-      {/* Process tag */}
       <td className="px-3 py-2.5">
         {processLabel ? <Tag color={processColor}>{processLabel}</Tag> : <span className="text-gray-400 text-xs">—</span>}
       </td>
 
-      {/* Printer (if assigned) */}
-      <td className="px-3 py-2.5 text-xs">
-        {pr.printer_name || <span className="text-gray-400">unassigned</span>}
+      <td className="px-3 py-2.5 font-mono text-xs">
+        {pr.roll_number ? (
+          <span className="text-navy-700 font-semibold">{pr.roll_number}</span>
+        ) : (
+          <span className="text-gray-400 italic">not yet</span>
+        )}
       </td>
 
-      {/* Status + secondary indicators */}
       <td className="px-3 py-2.5">
         <StatusPill status={pr.status} />
         <div className="flex flex-wrap gap-1 mt-1">
@@ -245,7 +296,6 @@ function PRRow({ pr }: { pr: any }) {
         </div>
       </td>
 
-      {/* Progress bar */}
       <td className="px-3 py-2.5 text-right">
         {planned > 0 ? (
           <>
@@ -257,7 +307,10 @@ function PRRow({ pr }: { pr: any }) {
         ) : <span className="text-gray-400 text-xs">—</span>}
       </td>
 
-      {/* Promised (commitment) or Estimated (pre-approval) */}
+      <td className="px-3 py-2.5 text-xs">
+        {pr.assigned_to_name || <span className="text-gray-400 italic">unassigned</span>}
+      </td>
+
       <td className="px-3 py-2.5">
         {hasPromised ? (
           <div className={`text-sm ${dateLabel.isLate ? 'text-red-700 font-semibold' : ''}`}>
@@ -274,15 +327,21 @@ function PRRow({ pr }: { pr: any }) {
   );
 }
 
-function FilterChip({ label, filter, current, count, accent }: { label: string; filter: string; current: string; count: number; accent?: 'red' | 'yellow' }) {
+function FilterChip({ label, filter, current, count, accent, q, status, assigned }: { label: string; filter: string; current: string; count: number; accent?: 'red' | 'yellow'; q?: string; status?: string; assigned?: string }) {
   const isActive = current === filter;
   let cls = '';
   if (isActive) cls = 'bg-navy-700 text-white border-navy-700';
   else if (accent === 'red' && count > 0) cls = 'border-red-200 bg-red-50 text-red-800 hover:bg-red-100';
   else if (accent === 'yellow' && count > 0) cls = 'border-yellow-200 bg-yellow-50 text-yellow-900 hover:bg-yellow-100';
   else cls = 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50';
+  // Preserve existing search/filter state when switching attention chips
+  const params = new URLSearchParams();
+  params.set('filter', filter);
+  if (q) params.set('q', q);
+  if (status && status !== 'all') params.set('status', status);
+  if (assigned && assigned !== 'all') params.set('assigned', assigned);
   return (
-    <Link href={`/print-requests?filter=${filter}`}
+    <Link href={`/print-requests?${params.toString()}`}
       className={`px-3 py-1 text-xs font-semibold rounded-full border transition-colors ${cls}`}>
       {label} <span className="ml-1 opacity-70 font-normal">{count}</span>
     </Link>

@@ -91,6 +91,11 @@ export function OrderRow({ order, prs }: { order: any; prs: PR[] }) {
         <div className="text-[11px] text-gray-500 mt-0.5">{summarizePRs(prs)}</div>
       </td>
 
+      {/* Assigned To */}
+      <td className="px-3 py-2.5 text-xs">
+        {order.assigned_to_name || <span className="text-gray-400 italic">unassigned</span>}
+      </td>
+
       {/* Promised (commitment) or Estimated (pre-approval, no commitment yet) */}
       <td className="px-3 py-2.5">
         {hasPromised ? (
