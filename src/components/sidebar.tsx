@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Home, FileText, Layers, Truck, Package, Palette, Printer, Scissors, Settings, Users, Inbox, AlertTriangle, Boxes, Flame, Sliders, FileScan, ClipboardList, CircleDot, Undo2, Brush, ScanLine } from 'lucide-react';
+import { Home, FileText, Layers, Truck, Package, Palette, Printer, Scissors, Settings, Users, Inbox, AlertTriangle, Boxes, Flame, Sliders, FileScan, ClipboardList, CircleDot, Undo2, Brush, ScanLine, ServerCog } from 'lucide-react';
 
 export function Sidebar() {
   return (
@@ -43,6 +43,7 @@ export function Sidebar() {
         <NavItem href="/packaging-profiles" icon={<Layers className="w-4 h-4" />} label="Packaging Profiles" />
         <NavItem href="/intake" icon={<FileText className="w-4 h-4" />} label="Intake Command Center" />
         <NavItem href="/po-intake" icon={<FileScan className="w-4 h-4" />} label="PDF PO Intake" badge="6" />
+        <NavItem href="/it-admin" icon={<ServerCog className="w-4 h-4" />} label="IT / System Admin (S14)" />
         <NavItem href="/settings" icon={<Settings className="w-4 h-4" />} label="Settings" />
       </nav>
 
