@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { getDb } from '@/lib/db';
 import { Card, CardHeader, Tag } from '@/components/ui';
 
@@ -13,6 +14,36 @@ export default function Settings() {
         <h1 className="text-2xl font-bold text-navy-900">Settings</h1>
         <p className="text-sm text-gray-500 mt-1">Prototype shell — full settings (printer mgmt, intake config edit, notification prefs, OD-3 thresholds, etc.) in Wave 1 build</p>
       </header>
+
+      <Card>
+        <CardHeader title="Settings Modules" />
+        <div className="p-5 grid grid-cols-3 gap-3">
+          <Link href="/settings/printers" className="border border-gray-200 rounded p-3 hover:bg-gray-50 hover:border-navy-700/30 transition-colors">
+            <div className="font-semibold text-navy-700 text-sm">Printer Management →</div>
+            <div className="text-xs text-gray-500 mt-0.5">Fleet registry, capacity, location, ink set</div>
+          </Link>
+          <Link href="/settings/print-profiles" className="border border-gray-200 rounded p-3 hover:bg-gray-50 hover:border-navy-700/30 transition-colors">
+            <div className="font-semibold text-navy-700 text-sm">Print Profile Management →</div>
+            <div className="text-xs text-gray-500 mt-0.5">ICC profiles, naming pattern, versioning</div>
+          </Link>
+          <Link href="/settings/roles" className="border border-gray-200 rounded p-3 hover:bg-gray-50 hover:border-navy-700/30 transition-colors">
+            <div className="font-semibold text-navy-700 text-sm">Roles &amp; Permissions →</div>
+            <div className="text-xs text-gray-500 mt-0.5">12 roles · R / RW / RWA per resource</div>
+          </Link>
+          <Link href="/packaging-profiles" className="border border-gray-200 rounded p-3 hover:bg-gray-50 hover:border-navy-700/30 transition-colors">
+            <div className="font-semibold text-navy-700 text-sm">Packaging Profiles →</div>
+            <div className="text-xs text-gray-500 mt-0.5">Per-customer + product type pack specs</div>
+          </Link>
+          <Link href="/customer-configs" className="border border-gray-200 rounded p-3 hover:bg-gray-50 hover:border-navy-700/30 transition-colors">
+            <div className="font-semibold text-navy-700 text-sm">Customer Configs →</div>
+            <div className="text-xs text-gray-500 mt-0.5">Onboarding, SKU mapping, intake config</div>
+          </Link>
+          <Link href="/it-admin" className="border border-gray-200 rounded p-3 hover:bg-gray-50 hover:border-navy-700/30 transition-colors">
+            <div className="font-semibold text-navy-700 text-sm">IT / System Admin →</div>
+            <div className="text-xs text-gray-500 mt-0.5">Integration health, sync queue, audit log</div>
+          </Link>
+        </div>
+      </Card>
 
       <Card>
         <CardHeader title="Users" subtitle="Per Wave 1 — RBAC matrix mirrors Permissions Matrix deliverable" />

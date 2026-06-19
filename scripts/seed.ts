@@ -55,6 +55,10 @@ const users = [
   ['julio@adt.com', 'Julio Vargas', 'print_op'],
   ['lucio@adt.com', 'Lucio Hernandez', 'finishing'],
   ['yuliana@adt.com', 'Yuliana Cruz', 'cut_sew'],
+  ['karen.purchasing@adt.com', 'Karen Boyd', 'inventory'],
+  ['marcus.ship@adt.com', 'Marcus Hill', 'shipping'],
+  ['tomas.receiving@adt.com', 'Tomás Rivera', 'receiving'],
+  ['diana.acct@adt.com', 'Diana Park', 'accounting'],
 ];
 const insUser = db.prepare(
   'INSERT INTO users (email, full_name, primary_role) VALUES (?, ?, ?)',
