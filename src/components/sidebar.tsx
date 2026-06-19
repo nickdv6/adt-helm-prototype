@@ -40,7 +40,7 @@ export function Sidebar() {
         <NavItem href="/designs" icon={<Brush className="w-4 h-4" />} label="Design Dashboard" />
         <NavItem href="/customer-configs" icon={<Sliders className="w-4 h-4" />} label="Customer Configs" />
         <NavItem href="/packaging-profiles" icon={<Layers className="w-4 h-4" />} label="Packaging Profiles" />
-        <NavItem href="/intake" icon={<FileText className="w-4 h-4" />} label="CSV/XML Intake" />
+        <NavItem href="/intake" icon={<FileText className="w-4 h-4" />} label="Intake Command Center" />
         <NavItem href="/po-intake" icon={<FileScan className="w-4 h-4" />} label="PDF PO Intake" badge="6" />
         <NavItem href="/settings" icon={<Settings className="w-4 h-4" />} label="Settings" />
       </nav>

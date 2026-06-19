@@ -160,7 +160,7 @@ export default function PrinterQueue() {
     <div className="max-w-7xl mx-auto space-y-6">
       <header>
         <h1 className="text-2xl font-bold text-navy-900">Printer Queue — Julio Vargas</h1>
-        <p className="text-sm text-gray-500 mt-1">S29 · Ready-to-schedule + currently-printing across all printers</p>
+        <p className="text-sm text-gray-500 mt-1">Ready-to-schedule + currently-printing across all printers · fed by <Link href="/intake" className="text-navy-700 hover:underline font-semibold">Intake Command Center</Link></p>
       </header>
 
       <div className="grid grid-cols-5 gap-4">

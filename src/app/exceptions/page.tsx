@@ -130,7 +130,7 @@ export default function ExceptionCenter({ searchParams }: { searchParams: { stat
       <header>
         <h1 className="text-2xl font-bold text-navy-900">Exception Center (C13)</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Centralized triage queue · status lifecycle: Open → Assigned → In Progress → Resolved | Cancelled · 20 exception types defined in Wave 1 Core
+          Centralized triage queue · status lifecycle: Open → Assigned → In Progress → Resolved | Cancelled · 20 exception types defined in Wave 1 Core · <Link href="/intake" className="text-navy-700 hover:underline font-semibold">open in Intake Command Center →</Link>
         </p>
       </header>
 

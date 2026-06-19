@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Plus, Trash2, Upload, Download, FileCheck, FolderInput, FolderOutput, Archive, KeyRound, Search, X, Pencil, Wand2 } from 'lucide-react';
 import { Card, CardHeader, Tag, Button } from '@/components/ui';
 
@@ -363,7 +364,7 @@ export default function CustomerConfigsAdmin() {
       <header className="mb-6">
         <h1 className="text-2xl font-bold text-navy-900">Customer CSV/XML Configurations</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Admin tool for onboarding new CSV / XML / email-driven customers and editing existing pipelines · drives C9 (file routing + strike-off initiation) and C10 (CSV/XML intake) downstream.
+          Admin tool for onboarding new customer programs · profiles drive automation (import method · default printer · fabric defaults · ICC profile · strike-off rules · QR strategy · routing logic) so the <Link href="/intake" className="text-navy-700 hover:underline font-semibold">Intake Command Center</Link> can run hands-off.
         </p>
       </header>
 
