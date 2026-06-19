@@ -1,62 +1,96 @@
-'use client';
-
-import { useState } from 'react';
 import Link from 'next/link';
-import { ChevronRight, ChevronDown } from 'lucide-react';
 import { StatusPill, Tag } from './ui';
-import { formatDate, relativeTime } from '@/lib/utils';
+import { formatPromised } from '@/lib/utils';
 
-export function OrderRow({ order, prs }: { order: any; prs: any[] }) {
-  const [expanded, setExpanded] = useState(false);
+// Compact, single-row order summary for the Order Dashboard.
+// Left accent stripe encodes priority (late > rush > attention > normal).
+// Order# + PO# stack vertically. Status + PR-mix summary stack vertically.
+// No expand — child PRs live on the Order Detail page.
+
+type PR = { id: number; pr_number: string; status: string };
+
+const FINISHED_STATUSES = new Set(['Closed', 'Shipped', 'Invoiced', 'Cancelled']);
+
+function priorityFor(order: any): {
+  accent: 'red' | 'yellow' | null;
+  badges: { label: string; color: 'red' | 'yellow' }[];
+} {
+  const badges: { label: string; color: 'red' | 'yellow' }[] = [];
+  const promised = order.adt_promised_date ? new Date(order.adt_promised_date) : null;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const isLate = promised && promised < today && !FINISHED_STATUSES.has(order.status);
+
+  if (isLate) badges.push({ label: 'Late', color: 'red' });
+  if (order.is_rush && !FINISHED_STATUSES.has(order.status)) badges.push({ label: 'Rush', color: 'red' });
+  if (order.status === 'On Hold') badges.push({ label: 'On Hold', color: 'yellow' });
+  if (order.status === 'Waiting on Approval') badges.push({ label: 'Approval', color: 'yellow' });
+
+  const accent: 'red' | 'yellow' | null =
+    isLate || (order.is_rush && !FINISHED_STATUSES.has(order.status)) ? 'red'
+    : order.status === 'On Hold' || order.status === 'Waiting on Approval' ? 'yellow'
+    : null;
+
+  return { accent, badges };
+}
+
+function summarizePRs(prs: PR[]): string {
+  if (prs.length === 0) return '—';
+  const byStatus = new Map<string, number>();
+  prs.forEach((pr) => byStatus.set(pr.status, (byStatus.get(pr.status) || 0) + 1));
+  // Show up to 2 most-populated buckets compactly
+  const entries = [...byStatus.entries()].sort((a, b) => b[1] - a[1]).slice(0, 2);
+  const summary = entries.map(([s, n]) => `${n} ${s.toLowerCase()}`).join(' · ');
+  return `${prs.length} PR${prs.length !== 1 ? 's' : ''} · ${summary}`;
+}
+
+export function OrderRow({ order, prs }: { order: any; prs: PR[] }) {
+  const { accent, badges } = priorityFor(order);
+  const promised = formatPromised(order.adt_promised_date);
+  const accentBg = accent === 'red' ? 'bg-red-500' : accent === 'yellow' ? 'bg-yellow-400' : '';
+  const rowBg = accent === 'red' ? 'hover:bg-red-50/40' : 'hover:bg-gray-50';
+
   return (
-    <>
-      <tr className="border-t border-gray-100 hover:bg-gray-50">
-        <td className="px-3 py-2.5">
-          {prs.length > 0 && (
-            <button onClick={() => setExpanded(!expanded)} className="text-gray-400 hover:text-navy-700">
-              {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            </button>
-          )}
-        </td>
-        <td className="px-3 py-2.5">
+    <tr className={`border-t border-gray-100 transition-colors ${rowBg}`}>
+      {/* Priority accent stripe */}
+      <td className="p-0 w-1">
+        {accent && <div className={`w-1 h-12 ${accentBg}`} />}
+      </td>
+
+      {/* Order # + PO # stacked */}
+      <td className="px-3 py-2.5">
+        <div className="flex items-center gap-2">
           <Link href={`/orders/${order.id}`} className="font-mono text-navy-700 hover:underline font-semibold">
             {order.order_number}
           </Link>
-          {order.is_rush ? <Tag color="red">Rush</Tag> : null}
-          {order.approval_required && order.status === 'Waiting on Approval'
-            ? <Tag color="yellow">Awaiting Megan</Tag>
-            : null}
-        </td>
-        <td className="px-3 py-2.5 font-mono text-xs text-gray-500">{order.po_number || '—'}</td>
-        <td className="px-3 py-2.5">{order.company_name}</td>
-        <td className="px-3 py-2.5">
-          <span className="font-mono text-xs text-gray-500">{order.roadmap}</span>
-        </td>
-        <td className="px-3 py-2.5"><StatusPill status={order.status} /></td>
-        <td className="px-3 py-2.5 text-xs">{formatDate(order.adt_promised_date)}</td>
-        <td className="px-3 py-2.5 text-right text-xs text-gray-500">{relativeTime(order.created_at)}</td>
-      </tr>
-      {expanded && prs.length > 0 && (
-        <tr className="bg-gray-50">
-          <td colSpan={8} className="px-3 py-2 pl-12">
-            <div className="text-[10px] uppercase tracking-wider font-semibold text-gray-500 mb-1.5">
-              Child Print Requests ({prs.length})
-            </div>
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-2">
-              {prs.map((pr) => (
-                <div key={pr.id} className="bg-white border border-gray-200 rounded px-2.5 py-1.5 text-xs flex items-center gap-2">
-                  <span className="font-mono text-navy-700 font-semibold">{pr.pr_number}</span>
-                  {pr.plant_number && <span className="text-[10px] text-gray-400 font-mono">{pr.plant_number}</span>}
-                  <StatusPill status={pr.status} />
-                  {pr.is_click_and_print ? <Tag color="purple">C+P</Tag> : null}
-                  {pr.was_csv_auto_routed ? <Tag color="blue">Auto-routed</Tag> : null}
-                  {pr.internal_proof_status === 'pending' ? <Tag color="yellow">Proof pending</Tag> : null}
-                </div>
-              ))}
-            </div>
-          </td>
-        </tr>
-      )}
-    </>
+          {badges.map((b) => (
+            <Tag key={b.label} color={b.color}>{b.label}</Tag>
+          ))}
+        </div>
+        {order.po_number && (
+          <div className="text-[11px] text-gray-400 font-mono mt-0.5">PO {order.po_number}</div>
+        )}
+      </td>
+
+      {/* Customer */}
+      <td className="px-3 py-2.5">{order.company_name}</td>
+
+      {/* Roadmap */}
+      <td className="px-3 py-2.5">
+        <span className="font-mono text-xs text-gray-500">{order.roadmap}</span>
+      </td>
+
+      {/* Status + PR mix stacked */}
+      <td className="px-3 py-2.5">
+        <StatusPill status={order.status} />
+        <div className="text-[11px] text-gray-500 mt-0.5">{summarizePRs(prs)}</div>
+      </td>
+
+      {/* Promised */}
+      <td className="px-3 py-2.5">
+        <div className={`text-sm ${promised.isLate ? 'text-red-700 font-semibold' : ''}`}>
+          {promised.label}
+        </div>
+      </td>
+    </tr>
   );
 }
