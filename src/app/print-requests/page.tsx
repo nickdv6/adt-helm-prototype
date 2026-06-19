@@ -4,10 +4,11 @@ import { Card, Button, StatusPill, Tag } from '@/components/ui';
 import { formatPromised } from '@/lib/utils';
 
 // /print-requests — Print Request Dashboard
-// PR is the daily operational unit. Search + filter so users can quickly find a PR by PR# or
-// customer company name. Roll #s are NOT shown here — rolls are pack-out-time artifacts and
-// are surfaced only on the Shipping page (where each PR may yield multiple rolls).
-// Filters: status, assigned-to, attention queues.
+// PR is the daily operational unit. Search + filter to find a PR by PR# or customer company.
+// Columns include the Fabric being printed on so the operator can scan by substrate at a glance.
+// 'Colorist' column = the colorist working the machine this PR is assigned to (per Nick).
+// Roll #s are NOT shown here — rolls are pack-out-time artifacts surfaced only on the Shipping
+// page (where each PR may yield multiple rolls).
 
 const FINISHED_PR_STATUSES = new Set(['Complete', 'Cancelled']);
 const PROCESS_LABEL: Record<string, string> = {
@@ -162,9 +163,9 @@ export default function PrintRequestDashboard({ searchParams }: { searchParams: 
             </select>
           </div>
           <div className="col-span-3">
-            <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-1">Assigned To</label>
+            <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-1">Colorist</label>
             <select name="assigned" defaultValue={assignedFilter} className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm bg-white">
-              <option value="all">Anyone</option>
+              <option value="all">Any colorist</option>
               {allAssignees.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
             </select>
           </div>
@@ -202,17 +203,18 @@ export default function PrintRequestDashboard({ searchParams }: { searchParams: 
             <tr>
               <th className="p-0 w-1"></th>
               <th className="text-left px-3 py-2.5">PR / Order</th>
-              <th className="text-left px-3 py-2.5">Design / Colorway / Fabric</th>
+              <th className="text-left px-3 py-2.5">Design / Colorway</th>
+              <th className="text-left px-3 py-2.5">Fabric</th>
               <th className="text-left px-3 py-2.5">Process</th>
               <th className="text-left px-3 py-2.5">Status</th>
               <th className="text-right px-3 py-2.5">Progress</th>
-              <th className="text-left px-3 py-2.5">Assigned To</th>
+              <th className="text-left px-3 py-2.5">Colorist</th>
               <th className="text-left px-3 py-2.5">Promised / Est.</th>
             </tr>
           </thead>
           <tbody>
             {prs.length === 0 && (
-              <tr><td colSpan={8} className="text-center py-12 text-gray-400">No print requests match these filters.</td></tr>
+              <tr><td colSpan={9} className="text-center py-12 text-gray-400">No print requests match these filters.</td></tr>
             )}
             {prs.map((pr) => <PRRow key={pr.id} pr={pr} />)}
           </tbody>
@@ -270,11 +272,11 @@ function PRRow({ pr }: { pr: any }) {
 
       <td className="px-3 py-2.5">
         <div className="font-semibold">{pr.design_name || <span className="text-gray-400">—</span>}</div>
-        <div className="text-[11px] text-gray-500">
-          {pr.colorway_name && <span>{pr.colorway_name}</span>}
-          {pr.colorway_name && pr.fabric_name && <span className="mx-1">·</span>}
-          {pr.fabric_name && <span>{pr.fabric_name}</span>}
-        </div>
+        {pr.colorway_name && <div className="text-[11px] text-gray-500">{pr.colorway_name}</div>}
+      </td>
+
+      <td className="px-3 py-2.5 text-xs">
+        {pr.fabric_name || <span className="text-gray-400">—</span>}
       </td>
 
       <td className="px-3 py-2.5">

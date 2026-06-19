@@ -51,6 +51,7 @@ const users = [
   ['sarah.csr@adt.com', 'Sarah Castillo', 'csr'],
   ['drew.sales@adt.com', 'Drew Walters', 'sales'],
   ['jeannine@adt.com', 'Jeannine Romero', 'colorist'],
+  ['maya@adt.com', 'Maya Chen', 'colorist'],
   ['julio@adt.com', 'Julio Vargas', 'print_op'],
   ['lucio@adt.com', 'Lucio Hernandez', 'finishing'],
   ['yuliana@adt.com', 'Yuliana Cruz', 'cut_sew'],
@@ -63,6 +64,14 @@ const userByRole: Record<string, number> = {};
 db.prepare('SELECT id, primary_role FROM users')
   .all()
   .forEach((r: any) => (userByRole[r.primary_role] = r.id));
+const userByEmail: Record<string, number> = {};
+db.prepare('SELECT id, email FROM users')
+  .all()
+  .forEach((r: any) => (userByEmail[r.email] = r.id));
+// Two colorists in the fleet — each owns specific printers (Assigned To on a PR = the colorist
+// working that machine, per Nick).
+const COLORIST_JEANNINE = userByEmail['jeannine@adt.com'];
+const COLORIST_MAYA = userByEmail['maya@adt.com'];
 
 console.log('Seeding companies...');
 const namedCompanies = [
@@ -428,18 +437,19 @@ for (let i = 0; i < totalOrders; i++) {
                                  : prStatus === 'Pending Internal Proof' ? 'pending'
                                  : ['Ready for Scheduling', 'Scheduled', 'Printing', 'Printed', 'Complete'].includes(prStatus) ? 'approved'
                                  : 'not_required';
-    // Assigned-To owner for the PR shifts with stage (colorist while in proof, print_op once
-    // scheduled, finishing after printed, etc.)
-    const prAssignedTo = (() => {
-      if (['Draft', 'Pending Internal Proof'].includes(prStatus)) {
-        return classification.includes('Customer') || internalProofStatus === 'pending'
-          ? userByRole['colorist'] : userByRole['csr'];
-      }
-      if (['Ready for Scheduling', 'Scheduled', 'Printing'].includes(prStatus)) return userByRole['print_op'];
-      if (prStatus === 'Printed') return userByRole['finishing'];
-      if (prStatus === 'Complete') return userByRole['shipping'] ?? userByRole['finishing'];
-      return userByRole['csr'];
-    })();
+    // Assigned-To on a PR = the colorist working that machine, per Nick. Colorists 'own' specific
+    // printers (Jeannine: Durst Alpha 330, MS JP7, MS JP4-A; Maya: MS JP4-B, Zimmer Colaris, both
+    // HP Latex units). Pre-print PRs (no printer yet) fall back to Jeannine as default.
+    const colorByPrinterName: Record<string, number> = {
+      'Durst Alpha 330': COLORIST_JEANNINE,
+      'MS JP7':          COLORIST_JEANNINE,
+      'MS JP4-A':        COLORIST_JEANNINE,
+      'MS JP4-B':        COLORIST_MAYA,
+      'Zimmer Colaris':  COLORIST_MAYA,
+      'HP Latex 800W':   COLORIST_MAYA,
+      'HP Latex 830W':   COLORIST_MAYA,
+    };
+    const prAssignedTo = colorByPrinterName[printer.name] ?? COLORIST_JEANNINE;
     const prRes = insPR.run(
       `PR-${prCounter++}`, lineId, printer.id, sku.fabric_id,
       printer.ink_set.toLowerCase().replace(/ /g, '_'),
