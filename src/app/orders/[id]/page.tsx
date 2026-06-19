@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { getDb } from '@/lib/db';
 import { Card, CardHeader, StatusPill, Tag, Button } from '@/components/ui';
+import { SubwayMap, RoadmapCode } from '@/components/subway-map';
 import { formatDate, relativeTime } from '@/lib/utils';
 import { notFound } from 'next/navigation';
 
@@ -88,15 +89,15 @@ export default function OrderDetail({ params }: { params: { id: string } }) {
         </Card>
       ) : null}
 
-      {/* Order Lines + per-line PR breakdown */}
+      {/* Order Lines + per-line PR breakdown with subway maps */}
       <Card>
-        <CardHeader title="Order Lines" subtitle="Per-line subway maps + child PRs" />
+        <CardHeader title="Order Lines · Subway Map" subtitle={`Roadmap ${order.roadmap} — each PR plotted along its route. Green = done, navy = current, gray = upcoming.`} />
         <div className="divide-y divide-gray-200">
           {lines.map((line) => {
             const linePRs = prs.filter((p) => p.line_id === line.id);
             return (
-              <div key={line.id} className="px-5 py-4">
-                <div className="flex items-center gap-4 mb-3">
+              <div key={line.id} className="px-5 py-5">
+                <div className="flex items-center gap-4 mb-4">
                   <div className="font-mono text-xs text-gray-500">{line.adt_sku}</div>
                   <div className="font-semibold">{line.product_type}</div>
                   <div className="text-sm text-gray-600">{line.fabric_name}</div>
@@ -106,26 +107,48 @@ export default function OrderDetail({ params }: { params: { id: string } }) {
                     {line.quantity} {line.quantity_unit}
                   </div>
                 </div>
-                <div className="flex items-center gap-2 text-xs">
+                <div className="flex items-center gap-2 text-xs mb-4">
                   <Tag color={line.strike_off_classification === 'Customer Strike-Off Required' ? 'yellow' : 'gray'}>
                     {line.strike_off_classification}
                   </Tag>
                   {line.is_click_and_print ? <Tag color="purple">Click-and-Print</Tag> : null}
                 </div>
-                {linePRs.length > 0 && (
-                  <div className="mt-3 pl-4 border-l-2 border-gray-200 space-y-1.5">
-                    {linePRs.map((pr) => (
-                      <Link key={pr.id} href={`/print-requests/${pr.id}`}
-                        className="flex items-center gap-2 text-xs hover:bg-gray-50 -mx-2 px-2 py-1 rounded">
-                        <span className="font-mono font-semibold text-navy-700">{pr.pr_number}</span>
-                        <StatusPill status={pr.status} />
-                        {pr.is_click_and_print ? <Tag color="purple">C+P</Tag> : null}
-                        {pr.was_csv_auto_routed ? <Tag color="blue">Auto-routed</Tag> : null}
-                        {pr.internal_proof_status === 'pending' ? <Tag color="yellow">Proof pending</Tag> : null}
-                        {pr.internal_proof_status === 'approved' ? <Tag color="green">Proof approved</Tag> : null}
-                        {pr.printed_yardage ? <span className="text-gray-500">{pr.printed_yardage}/{pr.planned_yardage} yds</span> : null}
-                      </Link>
-                    ))}
+
+                {linePRs.length > 0 ? (
+                  <div className="space-y-5 pl-4 border-l-2 border-navy-700/20">
+                    {linePRs.map((pr) => {
+                      // exception cues (drives red station on map)
+                      const exc = pr.composite_error
+                        ? 'Composite failed'
+                        : pr.internal_proof_status === 'failed'
+                        ? 'Proof failed'
+                        : pr.rip_recalled
+                        ? 'RIP recalled'
+                        : undefined;
+                      return (
+                        <div key={pr.id} className="space-y-2">
+                          <div className="flex items-center gap-2 text-xs">
+                            <Link href={`/print-requests/${pr.id}`}
+                              className="font-mono font-semibold text-navy-700 hover:underline">{pr.pr_number}</Link>
+                            <StatusPill status={pr.status} />
+                            {pr.is_click_and_print ? <Tag color="purple">C+P</Tag> : null}
+                            {pr.was_csv_auto_routed ? <Tag color="blue">Auto-routed</Tag> : null}
+                            {pr.internal_proof_status === 'pending' ? <Tag color="yellow">Proof pending</Tag> : null}
+                            {pr.internal_proof_status === 'approved' ? <Tag color="green">Proof approved</Tag> : null}
+                            {pr.printed_yardage ? <span className="text-gray-500">{pr.printed_yardage}/{pr.planned_yardage} yds</span> : null}
+                          </div>
+                          <SubwayMap
+                            roadmap={(order.roadmap as RoadmapCode) ?? 'R1'}
+                            currentStatus={pr.status}
+                            exception={exc}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-xs text-gray-400 italic pl-4 border-l-2 border-gray-200">
+                    No PRs yet — line is still in intake.
                   </div>
                 )}
               </div>

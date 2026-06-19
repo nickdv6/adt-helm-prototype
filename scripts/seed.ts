@@ -296,6 +296,48 @@ const vpnsByCustomerName: Record<string, string[]> = {
   'Havenly':  ['IH-CYP-PIL-18', 'IH-CYP-PIL-22'],
 };
 
+console.log('Seeding artwork files (PLANT#_DESIGN_COLORWAY_VERSION)...');
+const insArtwork = db.prepare(`
+  INSERT INTO artwork_files (design_id, colorway_id, version_number, file_name, nas_path,
+    status, is_original, date_received, submitted_by_user_id, dpi, color_profile,
+    width_inches, height_inches, file_size_kb)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`);
+const ARTWORK_STATUSES = ['Approved', 'Approved', 'Approved', 'Pending Approval', 'Draft', 'Archived'];
+const designsWithCo = db.prepare(`SELECT d.id, d.plant_number, d.name, d.company_id FROM designs d`).all() as any[];
+const allColorwaysByDesign = new Map<number, { id: number; name: string }[]>();
+db.prepare('SELECT id, design_id, name FROM colorways').all().forEach((c: any) => {
+  if (!allColorwaysByDesign.has(c.design_id)) allColorwaysByDesign.set(c.design_id, []);
+  allColorwaysByDesign.get(c.design_id)!.push(c);
+});
+designsWithCo.forEach((d) => {
+  const cws = allColorwaysByDesign.get(d.id) ?? [{ id: 0, name: 'default' }];
+  cws.forEach((cw) => {
+    const versionCount = faker.number.int({ min: 1, max: 3 });
+    for (let v = 1; v <= versionCount; v++) {
+      const status = v === versionCount ? ARTWORK_STATUSES[faker.number.int({ min: 0, max: 2 })] : 'Archived';
+      const fileName = `${d.plant_number}_${d.name.replace(/\s+/g, '-')}_${cw.name.replace(/\s+/g, '-')}_v${v}.tiff`;
+      const nasPath = `\\\\nas\\artwork\\${d.plant_number}\\${fileName}`;
+      insArtwork.run(
+        d.id,
+        cw.id || null,
+        v,
+        fileName,
+        nasPath,
+        status,
+        v === 1 ? 1 : 0,
+        faker.date.recent({ days: 120 }).toISOString(),
+        userByRole['colorist'],
+        faker.helpers.arrayElement([300, 600, 720]),
+        faker.helpers.arrayElement(['Adobe RGB (1998)', 'sRGB IEC61966-2.1', 'ProPhoto RGB']),
+        faker.number.float({ min: 24, max: 60, fractionDigits: 1 }),
+        faker.number.float({ min: 24, max: 36, fractionDigits: 1 }),
+        faker.number.int({ min: 1200, max: 48000 }),
+      );
+    }
+  });
+});
+
 console.log('Seeding orders + lines + PRs (last 18 months)...');
 const insOrder = db.prepare(`
   INSERT INTO orders (order_number, company_id, primary_contact_id, ship_to_address_id, roadmap,
@@ -602,6 +644,64 @@ for (let i = 0; i < totalOrders; i++) {
     }
   }
 }
+
+console.log('Seeding strike-offs (~60 across PRs in strike-off-bearing roadmaps)...');
+const insStrike = db.prepare(`
+  INSERT INTO strike_offs (strike_off_number, print_request_id, artwork_file_id, status,
+    customer_decision_at, customer_decision_outcome, customer_change_notes, approval_token, approval_sent_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+`);
+const STRIKE_STATUSES = [
+  'Requested', 'In Queue', 'In Color Matching', 'Printing', 'Quality Check',
+  'Awaiting Approval', 'Customer Reviewing', 'Approved', 'Approve with Changes',
+  'Rejected', 'Revision Required', 'On Hold', 'Cancelled', 'Closed',
+] as const;
+// Pull PRs whose parent order is on a roadmap that includes strike-off (R4, R5)
+const strikePRs = db.prepare(`
+  SELECT pr.id as pr_id, pr.pr_number, pr.artwork_file_id, pr.created_at, o.roadmap
+  FROM print_requests pr
+  JOIN order_lines ol ON pr.order_line_id = ol.id
+  JOIN orders o ON ol.order_id = o.id
+  WHERE o.roadmap IN ('R4', 'R5')
+  LIMIT 80
+`).all() as { pr_id: number; pr_number: string; artwork_file_id: number | null; created_at: string; roadmap: string }[];
+
+let strikeCounter = 7400;
+strikePRs.forEach((pr, idx) => {
+  // Skip ~20% (not every R4/R5 PR has a strike yet)
+  if (idx % 5 === 0) return;
+  const status = STRIKE_STATUSES[idx % STRIKE_STATUSES.length];
+  const decided = ['Approved','Approve with Changes','Rejected','Revision Required','Closed','Cancelled'].includes(status);
+  const sent = ['Awaiting Approval','Customer Reviewing','Approved','Approve with Changes','Rejected','Revision Required','Closed'].includes(status);
+  const decisionOutcome = decided
+    ? (status === 'Approve with Changes' ? 'Approve with Changes'
+       : status === 'Rejected' ? 'Rejected'
+       : status === 'Revision Required' ? 'Revision Required'
+       : status === 'Approved' ? 'Approved' : null)
+    : null;
+  const decisionAt = decided ? faker.date.recent({ days: 14 }).toISOString() : null;
+  const changeNotes = status === 'Approve with Changes'
+    ? faker.helpers.arrayElement([
+        'Make the navy 2 shades darker on next print.',
+        'Add 0.25" trim allowance on top edge.',
+        'Reduce repeat from 18" to 16".',
+        'Color OK — please flip orientation 90°.',
+      ])
+    : null;
+  const token = sent ? `tok_${faker.string.alphanumeric(10)}` : null;
+  const sentAt = sent ? faker.date.recent({ days: 21 }).toISOString() : null;
+  insStrike.run(
+    `SO-${strikeCounter++}`,
+    pr.pr_id,
+    pr.artwork_file_id,
+    status,
+    decisionAt,
+    decisionOutcome,
+    changeNotes,
+    token,
+    sentAt,
+  );
+});
 
 console.log('Seeding intake configs (5 customers — CSV/XML)...');
 const insIntake = db.prepare(`

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Home, FileText, Layers, Truck, Package, Palette, Printer, Scissors, Settings, Users, Inbox, AlertTriangle, Boxes, Flame, Sliders, FileScan, ClipboardList, CircleDot, Undo2, Brush, ScanLine, ServerCog } from 'lucide-react';
+import { Home, FileText, Layers, Truck, Package, Palette, Printer, Scissors, Settings, Users, Inbox, AlertTriangle, Boxes, Flame, Sliders, FileScan, ClipboardList, CircleDot, Undo2, Brush, ScanLine, ServerCog, GitBranch, FileImage, Stamp, BarChart3 } from 'lucide-react';
 
 export function Sidebar() {
   return (
@@ -20,11 +20,19 @@ export function Sidebar() {
 
         <Section label="Production" />
         <NavItem href="/print-requests" icon={<ClipboardList className="w-4 h-4" />} label="PR Dashboard" />
+        <NavItem href="/strike-offs" icon={<Stamp className="w-4 h-4" />} label="Strike-Offs" />
+        <NavItem href="/artwork" icon={<FileImage className="w-4 h-4" />} label="Artwork Files" />
         <NavItem href="/colorist" icon={<Palette className="w-4 h-4" />} label="Colorist Home" />
         <NavItem href="/printer-queue" icon={<Printer className="w-4 h-4" />} label="Printer Queue" />
         <NavItem href="/batch-ticket" icon={<Flame className="w-4 h-4" />} label="Batch Ticket · Heat Press" />
         <NavItem href="/cut-sew" icon={<Scissors className="w-4 h-4" />} label="Cut/Sew Queue" />
         <NavItem href="/cut-station" icon={<ScanLine className="w-4 h-4" />} label="CUT Station · Scan & Label" />
+
+        <Section label="Dashboards" />
+        <NavItem href="/dashboards/daily-production" icon={<BarChart3 className="w-4 h-4" />} label="Daily Production" />
+        <NavItem href="/dashboards/strike-off" icon={<BarChart3 className="w-4 h-4" />} label="Strike-Off" />
+        <NavItem href="/dashboards/csr" icon={<BarChart3 className="w-4 h-4" />} label="Customer Service" />
+        <NavItem href="/dashboards/quality" icon={<BarChart3 className="w-4 h-4" />} label="Quality" />
 
         <Section label="Fulfillment" />
         <NavItem href="/shipping" icon={<Truck className="w-4 h-4" />} label="Shipping" />
@@ -39,6 +47,7 @@ export function Sidebar() {
         <Section label="Admin" />
         <NavItem href="/customers" icon={<Users className="w-4 h-4" />} label="Customers" />
         <NavItem href="/designs" icon={<Brush className="w-4 h-4" />} label="Design Dashboard" />
+        <NavItem href="/roadmaps" icon={<GitBranch className="w-4 h-4" />} label="Roadmap Builder" />
         <NavItem href="/customer-configs" icon={<Sliders className="w-4 h-4" />} label="Customer Configs" />
         <NavItem href="/packaging-profiles" icon={<Layers className="w-4 h-4" />} label="Packaging Profiles" />
         <NavItem href="/intake" icon={<FileText className="w-4 h-4" />} label="Intake Command Center" />
