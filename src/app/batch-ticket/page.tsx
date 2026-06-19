@@ -30,7 +30,7 @@ const BATCH = {
   built_by: 'Julio Vargas',
   built_at: '12 minutes ago',
   fabric: 'Cotton Sateen 110-thread',
-  printer: 'MS JP4',
+  printer: 'MS JP4-A',
   total_yards: 45,
   destination_press: 'Heat Press #2 (Lucio)',
   prs: [

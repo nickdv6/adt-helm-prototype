@@ -114,7 +114,15 @@ const STRIKEOFF_APPROVAL = [
 ];
 const PRINT_PROFILES = ['Cotton Sateen 110-thread · Default', 'Cotton Sateen 90-thread · Default', 'Linen Blend Natural · Default', 'Velvet Cotton · Default', 'Customer-Supplied · per-PR'];
 const FABRIC_OPTIONS = ['Cotton Sateen 110-thread', 'Cotton Sateen 90-thread', 'Linen Blend Natural', 'Velvet Cotton', 'Textured Linen', 'Performance Outdoor'];
-const HOT_FOLDERS = ['MS JP4 hot folder', 'MS JP7 hot folder', 'Durst Alpha 330 hot folder', 'Zimmer Colaris hot folder', 'HP Latex 830W hot folder', 'HP Latex 800W hot folder'];
+const HOT_FOLDERS = [
+  'Durst Alpha 330 hot folder',
+  'MS JP7 hot folder',
+  'MS JP4-A hot folder',
+  'MS JP4-B hot folder',
+  'HP Latex 830W hot folder',
+  'HP Latex 800W hot folder',
+  'Zimmer Colaris hot folder',
+];
 
 // =====================================================================
 // Initial form values for a preset (rough mock — fields admins would tweak)
@@ -216,9 +224,11 @@ const stfrankPreset = () => ({
   archive_format: ARCHIVE_FORMATS[0],
   archive_naming: 'stfrank_pl_{order_number}_{YYYYMMDD}.pdf',
   archive_retention_days: '2555',
-  default_hot_folder: HOT_FOLDERS[0],
+  // Cotton Sateen jobs default to MS JP4-A (Fiber Reactive, mid-volume);
+  // Linen Blend Natural overrides to MS JP7 (also Fiber Reactive, higher throughput).
+  default_hot_folder: 'MS JP4-A hot folder',
   hot_folder_overrides: [
-    { id: 'ho1', fabric: 'Linen Blend Natural', hot_folder: HOT_FOLDERS[1] },
+    { id: 'ho1', fabric: 'Linen Blend Natural', hot_folder: 'MS JP7 hot folder' },
   ],
   fulfillment_mode: FULFILLMENT_MODES[0],
   label_mode: LABEL_MODES[4],   // 'N/A (direct-to-customer)' — note: shifted index after Mode D was inserted

@@ -9,7 +9,7 @@
  *   - ~120 designs (PLANT# P25-#### + P26-####)
  *   - ~240 colorways
  *   - ~200 SKUs across product types
- *   - 6 printers
+ *   - 7 printers (Durst Alpha 330, MS JP7, MS JP4-A, MS JP4-B, HP Latex 830W, HP Latex 800W, Zimmer Colaris)
  *   - ~40 print profiles
  *   - ~30 packaging profiles
  *   - 250+ orders spanning the last 18 months (mix of statuses)
@@ -145,13 +145,16 @@ const insPrinter = db.prepare(`
   INSERT INTO printers (name, model, ink_set, workstation_location, status, throughput_yards_per_hour)
   VALUES (?, ?, ?, ?, ?, ?)
 `);
+// Real ADT printer fleet (7 machines)
+// Per Megan / Julio + WHY interviews: Durst Alpha has long changeovers; MS JP4s are duplicated for capacity
 const printerSpecs = [
-  ['Epson F9470 #1', 'Epson F9470', 'Dye Sublimation', 'Print Room A', 'running', 18],
-  ['Epson F9470 #2', 'Epson F9470', 'Dye Sublimation', 'Print Room A', 'running', 18],
-  ['Mimaki TS55 #1', 'Mimaki TS55-1800', 'Reactive', 'Print Room B', 'idle', 15],
-  ['Mimaki TS55 #2', 'Mimaki TS55-1800', 'Pigment', 'Print Room B', 'running', 15],
-  ['Mutoh VJ-1638WX', 'Mutoh VJ-1638WX', 'Latex', 'Print Room C', 'idle', 12],
-  ['Epson SureColor F11070H', 'Epson F11070H', 'Dye Sublimation', 'Print Room A', 'maintenance', 22],
+  ['Durst Alpha 330',  'Durst Alpha 330',    'Fiber Reactive', 'Print Room A', 'running',     95],
+  ['MS JP7',           'MS JP7',             'Fiber Reactive', 'Print Room A', 'running',     45],
+  ['MS JP4-A',         'MS JP4',             'Fiber Reactive', 'Print Room B', 'running',     28],
+  ['MS JP4-B',         'MS JP4',             'Pigment',        'Print Room B', 'idle',        28],
+  ['HP Latex 830W',    'HP Latex 830W',      'Latex',          'Print Room C', 'running',     22],
+  ['HP Latex 800W',    'HP Latex 800W',      'Latex',          'Print Room C', 'idle',        18],
+  ['Zimmer Colaris',   'Zimmer Colaris',     'Fiber Reactive', 'Print Room A', 'maintenance', 70],
 ];
 printerSpecs.forEach((p) => insPrinter.run(...(p as any[])));
 const printers = db.prepare('SELECT id, name, ink_set FROM printers').all() as { id: number; name: string; ink_set: string }[];
