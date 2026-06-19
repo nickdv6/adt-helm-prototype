@@ -38,7 +38,7 @@ export default function InvoiceDetail({ params }: { params: { id: string } }) {
       <header className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-3 mb-1">
-            <Link href="/accounting" className="text-sm text-gray-500 hover:underline">← Accounting</Link>
+            <Link href="/accounting-home" className="text-sm text-gray-500 hover:underline">← Accounting Home</Link>
             <span className="text-gray-300">/</span>
             <h1 className="text-2xl font-bold text-navy-900 font-mono">{invoiceNumber}</h1>
             <Tag color={qbId ? 'green' : 'yellow'}>{qbId ? 'Synced to QB' : 'Not yet pushed'}</Tag>

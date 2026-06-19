@@ -111,9 +111,9 @@ export default function AccountingHome() {
         </div>
       }
       crossLinks={[
-        { label: 'Accounting Workflows', href: '/accounting', description: 'Full QB sync queue + invoicing' },
         { label: 'Customers', href: '/customers', description: 'Terms, billing contacts' },
         { label: 'Exception Center', href: '/exceptions', description: 'Failed QB syncs' },
+        { label: 'IT / System Admin', href: '/it-admin', description: 'QuickBooks integration health' },
       ]}
     />
   );

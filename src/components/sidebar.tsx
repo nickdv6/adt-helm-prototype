@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Home, FileText, Layers, Truck, Package, Palette, Printer, Scissors, Settings, Users, Inbox, AlertTriangle, Boxes, Flame, Sliders, FileScan, ClipboardList, CircleDot, Undo2, Brush, ScanLine, ServerCog, GitBranch, FileImage, Stamp, BarChart3, UserRound, Calendar, DollarSign, RotateCcw } from 'lucide-react';
+import { Home, FileText, Layers, Truck, Package, Palette, Printer, Scissors, Settings, Users, Inbox, AlertTriangle, Boxes, Flame, Sliders, FileScan, ClipboardList, CircleDot, Undo2, Brush, ScanLine, ServerCog, GitBranch, FileImage, Stamp, BarChart3, UserRound, Calendar, RotateCcw } from 'lucide-react';
 
 export function Sidebar() {
   return (
@@ -56,7 +56,6 @@ export function Sidebar() {
         <Section label="Operations" />
         <NavItem href="/exceptions" icon={<AlertTriangle className="w-4 h-4" />} label="Exception Center" badge="6" />
         <NavItem href="/packing-correction" icon={<Undo2 className="w-4 h-4" />} label="Packing Correction" />
-        <NavItem href="/accounting" icon={<DollarSign className="w-4 h-4" />} label="Accounting · QB" />
 
         <Section label="Admin" />
         <NavItem href="/customers" icon={<Users className="w-4 h-4" />} label="Customers" />
