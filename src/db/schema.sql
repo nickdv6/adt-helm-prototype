@@ -250,7 +250,10 @@ CREATE TABLE IF NOT EXISTS orders (
   status TEXT NOT NULL DEFAULT 'Draft', -- Order lifecycle per 6.6 + Megan E1
   customer_facing_status TEXT, -- 6-state per 6.5
   customer_requested_date TEXT,
-  adt_promised_date TEXT,
+  estimated_ship_date TEXT,  -- Set at order entry. Provisional / internal estimate, no promise to the customer yet.
+  adt_promised_date TEXT,    -- Set only when the order is approved (internally or by the customer). This is the
+                             -- commitment the customer hears about. ADT does not promise a date until approval.
+                             -- Late-flag logic must use this column, NEVER estimated_ship_date.
   po_number TEXT,
   source_system TEXT NOT NULL DEFAULT 'manual', -- manual | shopify_advdigitaltextiles | shopify_fabricondemand | csv_import_st_frank | csv_import_inside | csv_import_lemieux | csv_import_laura_park | xml_import_fabric_megastore
   primary_csr_user_id INTEGER,

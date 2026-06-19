@@ -149,7 +149,7 @@ function ProductionTab() {
     SELECT COUNT(*) as c FROM orders WHERE date(adt_promised_date) = date('now') AND status NOT IN ('Closed','Shipped','Invoiced','Cancelled')
   `).get() as any;
   const overdue = db.prepare(`
-    SELECT COUNT(*) as c FROM orders WHERE date(adt_promised_date) < date('now') AND status NOT IN ('Closed','Shipped','Invoiced','Cancelled')
+    SELECT COUNT(*) as c FROM orders WHERE adt_promised_date IS NOT NULL AND date(adt_promised_date) < date('now') AND status NOT IN ('Closed','Shipped','Invoiced','Cancelled')
   `).get() as any;
 
   return (

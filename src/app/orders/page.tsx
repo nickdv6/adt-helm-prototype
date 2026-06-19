@@ -14,25 +14,32 @@ export default function OrderDashboard({ searchParams }: { searchParams: { filte
   let where = '1=1';
   if (filter === 'today') where = "date(o.adt_promised_date) = date('now')";
   if (filter === 'this_week') where = "date(o.adt_promised_date) BETWEEN date('now') AND date('now', '+7 days')";
-  if (filter === 'late') where = "date(o.adt_promised_date) < date('now') AND o.status NOT IN ('Closed','Shipped','Invoiced','Cancelled')";
+  if (filter === 'late') where = "o.adt_promised_date IS NOT NULL AND date(o.adt_promised_date) < date('now') AND o.status NOT IN ('Closed','Shipped','Invoiced','Cancelled')";
   if (filter === 'on_hold') where = "o.status = 'On Hold'";
   if (filter === 'awaiting_approval') where = "o.status = 'Waiting on Approval'";
   if (filter === 'credit_hold') where = "EXISTS (SELECT 1 FROM companies c2 WHERE c2.id = o.company_id AND c2.is_credit_hold = 1)";
   if (filter === 'rush') where = "o.is_rush = 1 AND o.status NOT IN ('Closed','Shipped','Invoiced','Cancelled')";
 
-  // Sort by priority (late first, then rush, then by promised date) for a more useful default ordering
+  // Sort by priority. Late is only computable against adt_promised_date — pre-approval orders
+  // (those with no promised date yet) cannot be Late by definition. Their Estimated Ship Date
+  // is provisional and not a commitment.
   const orders = db.prepare(`
     SELECT o.id, o.order_number, o.po_number, c.name as company_name, o.roadmap, o.status,
-           o.adt_promised_date, o.created_at, o.is_rush, o.approval_required, o.trigger_reason,
+           o.estimated_ship_date, o.adt_promised_date, o.created_at, o.is_rush,
+           o.approval_required, o.trigger_reason,
            CASE
-             WHEN date(o.adt_promised_date) < date('now') AND o.status NOT IN ('Closed','Shipped','Invoiced','Cancelled') THEN 0
+             WHEN o.adt_promised_date IS NOT NULL
+                  AND date(o.adt_promised_date) < date('now')
+                  AND o.status NOT IN ('Closed','Shipped','Invoiced','Cancelled') THEN 0
              WHEN o.is_rush = 1 AND o.status NOT IN ('Closed','Shipped','Invoiced','Cancelled') THEN 1
              WHEN o.status IN ('On Hold','Waiting on Approval') THEN 2
              ELSE 3
            END as priority_rank
     FROM orders o JOIN companies c ON o.company_id = c.id
     WHERE ${where}
-    ORDER BY priority_rank ASC, date(o.adt_promised_date) ASC, o.created_at DESC
+    ORDER BY priority_rank ASC,
+             COALESCE(date(o.adt_promised_date), date(o.estimated_ship_date)) ASC,
+             o.created_at DESC
     LIMIT 50
   `).all() as any[];
 
@@ -56,7 +63,7 @@ export default function OrderDashboard({ searchParams }: { searchParams: { filte
     all: (db.prepare('SELECT COUNT(*) as c FROM orders').get() as any).c,
     today: (db.prepare("SELECT COUNT(*) as c FROM orders o WHERE date(o.adt_promised_date) = date('now')").get() as any).c,
     this_week: (db.prepare("SELECT COUNT(*) as c FROM orders o WHERE date(o.adt_promised_date) BETWEEN date('now') AND date('now', '+7 days')").get() as any).c,
-    late: (db.prepare("SELECT COUNT(*) as c FROM orders o WHERE date(o.adt_promised_date) < date('now') AND o.status NOT IN ('Closed','Shipped','Invoiced','Cancelled')").get() as any).c,
+    late: (db.prepare("SELECT COUNT(*) as c FROM orders o WHERE o.adt_promised_date IS NOT NULL AND date(o.adt_promised_date) < date('now') AND o.status NOT IN ('Closed','Shipped','Invoiced','Cancelled')").get() as any).c,
     on_hold: (db.prepare("SELECT COUNT(*) as c FROM orders WHERE status = 'On Hold'").get() as any).c,
     awaiting_approval: (db.prepare("SELECT COUNT(*) as c FROM orders WHERE status = 'Waiting on Approval'").get() as any).c,
     rush: (db.prepare("SELECT COUNT(*) as c FROM orders WHERE is_rush = 1 AND status NOT IN ('Closed','Shipped','Invoiced','Cancelled')").get() as any).c,
@@ -114,7 +121,7 @@ export default function OrderDashboard({ searchParams }: { searchParams: { filte
               <th className="text-left px-3 py-2.5">Customer</th>
               <th className="text-left px-3 py-2.5">Roadmap</th>
               <th className="text-left px-3 py-2.5">Status</th>
-              <th className="text-left px-3 py-2.5">Promised</th>
+              <th className="text-left px-3 py-2.5">Promised / Est. ship</th>
             </tr>
           </thead>
           <tbody>

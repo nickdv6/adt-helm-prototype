@@ -246,12 +246,18 @@ pkgCombos.forEach((p) => {
 console.log('Seeding orders + lines + PRs (last 18 months)...');
 const insOrder = db.prepare(`
   INSERT INTO orders (order_number, company_id, primary_contact_id, ship_to_address_id, roadmap,
-    status, customer_facing_status, customer_requested_date, adt_promised_date,
+    status, customer_facing_status, customer_requested_date, estimated_ship_date, adt_promised_date,
     po_number, source_system, primary_csr_user_id, subtotal, is_blind_ship, is_rush,
     approval_required, trigger_reason, trigger_source, approval_completed_at, approved_by_user_id,
     is_legacy, created_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
+
+// Pre-approval statuses get an Estimated Ship Date only. ADT does not commit to a Promised
+// Date until the order is approved for production (internally or by the customer).
+const PRE_APPROVAL_STATUSES = new Set([
+  'Draft', 'Validated', 'Waiting on Approval', 'Waiting on Customer', 'Waiting on Artwork',
+]);
 const insLine = db.prepare(`
   INSERT INTO order_lines (order_id, sku_id, design_id, colorway_id, fabric_id, quantity, quantity_unit, unit_price,
     strike_off_classification, colorist_user_id, is_click_and_print)
@@ -322,7 +328,11 @@ for (let i = 0; i < totalOrders; i++) {
   const createdDaysAgo = isClosed ? faker.number.int({ min: 30, max: 540 }) : faker.number.int({ min: 1, max: 60 });
   const createdAt = faker.date.recent({ days: createdDaysAgo }).toISOString();
   const reqDate = faker.date.soon({ days: 30, refDate: createdAt }).toISOString().slice(0, 10);
-  const promisedDate = faker.date.soon({ days: 5, refDate: reqDate }).toISOString().slice(0, 10);
+  // Estimated Ship Date is always set at order entry (provisional, internal).
+  const estimatedShipDate = faker.date.soon({ days: 5, refDate: reqDate }).toISOString().slice(0, 10);
+  // Promised Date is only set once the order is approved for production. For pre-approval
+  // statuses it stays NULL — the customer hasn't been promised a date yet.
+  const promisedDate = PRE_APPROVAL_STATUSES.has(ordStatus.status) ? null : estimatedShipDate;
   const orderNum = `ADT-${orderCounter++}`;
   const subtotal = faker.number.int({ min: 800, max: 18000 });
   const isRush = subtotal > 8000 && Math.random() < 0.15 ? 1 : 0;
@@ -343,6 +353,7 @@ for (let i = 0; i < totalOrders; i++) {
     ordStatus.status,
     ordStatus.cfs,
     reqDate,
+    estimatedShipDate,
     promisedDate,
     isShopify ? null : `PO-${faker.string.alphanumeric(8).toUpperCase()}`,
     source,

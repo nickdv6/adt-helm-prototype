@@ -16,9 +16,11 @@ function priorityFor(order: any): {
   badges: { label: string; color: 'red' | 'yellow' }[];
 } {
   const badges: { label: string; color: 'red' | 'yellow' }[] = [];
+  // Late status can ONLY be computed against the Promised Date. Pre-approval orders that have
+  // only an Estimated Ship Date can never be Late — ADT hasn't committed to that date.
   const promised = order.adt_promised_date ? new Date(order.adt_promised_date) : null;
   const today = new Date(); today.setHours(0, 0, 0, 0);
-  const isLate = promised && promised < today && !FINISHED_STATUSES.has(order.status);
+  const isLate = !!(promised && promised < today && !FINISHED_STATUSES.has(order.status));
 
   if (isLate) badges.push({ label: 'Late', color: 'red' });
   if (order.is_rush && !FINISHED_STATUSES.has(order.status)) badges.push({ label: 'Rush', color: 'red' });
@@ -45,7 +47,11 @@ function summarizePRs(prs: PR[]): string {
 
 export function OrderRow({ order, prs }: { order: any; prs: PR[] }) {
   const { accent, badges } = priorityFor(order);
-  const promised = formatPromised(order.adt_promised_date);
+  // If the order has been approved for production, render the Promised Date (commitment).
+  // Otherwise render the Estimated Ship Date with a "pending approval" qualifier — ADT has
+  // not committed to a date until approval.
+  const hasPromised = !!order.adt_promised_date;
+  const dateLabel = formatPromised(hasPromised ? order.adt_promised_date : order.estimated_ship_date);
   const accentBg = accent === 'red' ? 'bg-red-500' : accent === 'yellow' ? 'bg-yellow-400' : '';
   const rowBg = accent === 'red' ? 'hover:bg-red-50/40' : 'hover:bg-gray-50';
 
@@ -85,11 +91,18 @@ export function OrderRow({ order, prs }: { order: any; prs: PR[] }) {
         <div className="text-[11px] text-gray-500 mt-0.5">{summarizePRs(prs)}</div>
       </td>
 
-      {/* Promised */}
+      {/* Promised (commitment) or Estimated (pre-approval, no commitment yet) */}
       <td className="px-3 py-2.5">
-        <div className={`text-sm ${promised.isLate ? 'text-red-700 font-semibold' : ''}`}>
-          {promised.label}
-        </div>
+        {hasPromised ? (
+          <div className={`text-sm ${dateLabel.isLate ? 'text-red-700 font-semibold' : ''}`}>
+            {dateLabel.label}
+          </div>
+        ) : (
+          <div className="text-sm">
+            <span className="text-gray-700">{dateLabel.label}</span>
+            <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mt-0.5">Est. · pending approval</div>
+          </div>
+        )}
       </td>
     </tr>
   );

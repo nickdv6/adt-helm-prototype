@@ -49,7 +49,12 @@ export default function OrderDetail({ params }: { params: { id: string } }) {
             {order.approval_required ? <Tag color="yellow">Megan Approval</Tag> : null}
           </div>
           <div className="text-sm text-gray-600">
-            {order.company_name} · ADT Promised <strong>{formatDate(order.adt_promised_date)}</strong>
+            {order.company_name}
+            {order.adt_promised_date ? (
+              <> · Promised <strong>{formatDate(order.adt_promised_date)}</strong></>
+            ) : (
+              <> · Est. ship <strong>{formatDate(order.estimated_ship_date)}</strong> <span className="text-xs text-yellow-700 ml-1">(pending approval — not yet promised)</span></>
+            )}
             {order.po_number ? <> · PO {order.po_number}</> : null}
           </div>
         </div>
