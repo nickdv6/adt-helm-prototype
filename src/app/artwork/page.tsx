@@ -99,14 +99,8 @@ export default function ArtworkManagement({ searchParams }: { searchParams: { st
 
       <Card>
         <CardHeader title="Filters" />
-        <div className="p-5 flex flex-wrap items-center gap-3">
-          <select name="status" defaultValue={statusFilter}
-            className="text-sm border border-gray-300 rounded px-2 py-1"
-            onChange={(e) => { /* prototype — would be a form */ }}>
-            <option value="all">All statuses</option>
-            {Object.keys(STATUS_COLORS).map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <form action="/artwork" className="flex items-center gap-2 ml-auto">
+        <div className="p-5">
+          <form action="/artwork" className="flex flex-wrap items-center gap-2">
             <select name="status" defaultValue={statusFilter} className="text-sm border border-gray-300 rounded px-2 py-1">
               <option value="all">All statuses</option>
               {Object.keys(STATUS_COLORS).map((s) => <option key={s} value={s}>{s}</option>)}

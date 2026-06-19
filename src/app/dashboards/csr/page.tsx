@@ -36,7 +36,7 @@ export default function CSRDashboard() {
 
   // Awaiting customer (any strike-off / approval blocking)
   const awaitingCust = db.prepare(`
-    SELECT o.id, o.order_number, o.customer_facing_status, c.name as company_name,
+    SELECT so.id as so_id, o.id, o.order_number, o.customer_facing_status, c.name as company_name,
            so.strike_off_number, so.approval_sent_at
     FROM strike_offs so
     JOIN print_requests pr ON so.print_request_id = pr.id
@@ -157,9 +157,9 @@ export default function CSRDashboard() {
               </thead>
               <tbody>
                 {awaitingCust.map((s) => (
-                  <tr key={s.strike_off_number} className="border-t border-gray-100 hover:bg-gray-50">
+                  <tr key={s.so_id} className="border-t border-gray-100 hover:bg-gray-50">
                     <td className="px-4 py-2.5 font-mono text-xs">
-                      <Link href={`/strike-offs/${s.strike_off_number}`} className="text-navy-700 hover:underline">{s.strike_off_number}</Link>
+                      <Link href={`/strike-offs/${s.so_id}`} className="text-navy-700 hover:underline">{s.strike_off_number}</Link>
                     </td>
                     <td className="px-4 py-2.5 text-xs">{s.company_name}</td>
                     <td className="px-4 py-2.5 text-xs text-gray-500">{s.approval_sent_at ? relativeTime(s.approval_sent_at) : '—'}</td>
