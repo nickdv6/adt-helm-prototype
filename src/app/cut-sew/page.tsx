@@ -80,7 +80,7 @@ export default function CutSew() {
 
       {/* Bundles view — grouped per Yuliana #2 */}
       <Card>
-        <CardHeader title="Bundles" subtitle="Grouped by product type + size (per Yuliana #2). Click an FPR to open." />
+        <CardHeader title="Bundles" subtitle="Grouped by product type + size · click an FPR to open detail with the printable Tech Sheet" />
         <div className="divide-y divide-gray-100">
           {bundles.size === 0 && <div className="px-5 py-10 text-center text-sm text-gray-400">No active FPRs.</div>}
           {Array.from(bundles.entries()).map(([key, items]) => {
@@ -94,14 +94,18 @@ export default function CutSew() {
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   {items.map((f) => (
-                    <div key={f.id} className="border border-gray-200 rounded px-3 py-2 hover:bg-gray-50 text-xs">
+                    <Link
+                      key={f.id}
+                      href={`/fprs/${f.id}`}
+                      className="block border border-gray-200 rounded px-3 py-2 hover:bg-navy-50/40 hover:border-navy-300 text-xs transition-colors"
+                    >
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-mono font-semibold text-navy-700">{f.fpr_number}</span>
                         <StatusPill status={f.status} />
                         {f.is_rush ? <Tag color="red">Rush</Tag> : null}
                       </div>
                       <div className="text-gray-600">
-                        <Link href={`/orders/${f.order_id}`} className="font-mono text-navy-700 hover:underline">{f.order_number}</Link>
+                        <span className="font-mono text-navy-700">{f.order_number}</span>
                         <span className="mx-1.5">·</span>
                         {f.company_name}
                       </div>
@@ -118,7 +122,7 @@ export default function CutSew() {
                           Missing component override active
                         </div>
                       )}
-                    </div>
+                    </Link>
                   ))}
                 </div>
               </div>
