@@ -70,7 +70,12 @@ export default function DesignDashboard({ searchParams }: {
             {designs.length} of {totalDesigns} designs · search by name, plant #, or customer · add new designs manually or via customer intake
           </p>
         </div>
-        <Button><Plus className="w-3.5 h-3.5 mr-1" />Add Design</Button>
+        <div className="flex gap-2">
+          <Link href="/designs/import" className="inline-flex items-center justify-center font-semibold rounded transition-colors px-3.5 py-2 text-sm bg-white text-navy-700 border border-gray-300 hover:bg-gray-50">
+            <Upload className="w-3.5 h-3.5 mr-1" />Bulk Import CSV
+          </Link>
+          <Button><Plus className="w-3.5 h-3.5 mr-1" />Add Design</Button>
+        </div>
       </header>
 
       {/* Search + filter + sort */}
