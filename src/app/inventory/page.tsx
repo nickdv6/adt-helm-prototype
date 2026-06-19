@@ -1,31 +1,37 @@
 import Link from 'next/link';
 import { Card, CardHeader, Tag, Button } from '@/components/ui';
-import { Beaker, Calendar, AlertTriangle, Plus } from 'lucide-react';
+import { Beaker, Calendar, AlertTriangle, Plus, Info } from 'lucide-react';
 
-// /inventory — Fabric stock visibility with pretreatment state
+// /inventory — Fabric stock visibility per print-process fabric-state
 //
-// Per Nick: every fabric SKU must show whether stock has been pretreated and, if so, with which
-// of the two pretreatments. The two pretreatments correspond directly to the two print processes:
-//   - 'Fiber Reactive prep' → required before Fiber Reactive printing
-//   - 'Pigment prep' → required before Pigment printing
-// Raw (untreated) stock must be pretreated before it can be printed. The page surfaces upcoming
-// pretreatment demand vs current pretreated stock so the pretreatment line can be scheduled to
-// match production needs.
+// Per Nick: fabric comes from the mill as PFP (Prepared For Print). Whether further treatment
+// is needed depends on the destination print process:
+//
+//   Fiber Reactive printers (MS JP7)           → require Fiber Reactive prepped fabric
+//   Pigment printers (Durst Alpha 330, Zimmer) → require Pigment prepped fabric
+//   Dye Sublimation printers (MS JP4-A / B)    → print on PFP directly (NO further pretreatment)
+//   Latex printers (HP Latex 800W / 830W)      → print on PFP directly (NO further pretreatment)
+//
+// So PFP serves a dual role: it's both the inbound stock state AND the directly-usable state for
+// Dye Sub + Latex jobs. Fiber Reactive and Pigment jobs require pretreating PFP fabric into the
+// corresponding prepped buckets. The Pretreatment Schedule section forecasts only FR + Pigment
+// demand against current prepped stock.
 
 const TREATMENTS = ['Fiber Reactive prep', 'Pigment prep'] as const;
 type Treatment = typeof TREATMENTS[number];
+type DirectProcess = 'Dye Sublimation' | 'Latex';
 
 type FabricInventory = {
   id: string;
   fabric_name: string;
   greige_code: string;
   width: string;
-  raw_yards: number;
-  fr_prepped_yards: number;
-  pigment_prepped_yards: number;
-  reserved_against_raw: number;
-  reserved_against_fr: number;
-  reserved_against_pigment: number;
+  pfp_yards: number;            // Prepared For Print — directly usable for Dye Sub + Latex
+  fr_prepped_yards: number;     // pretreated for Fiber Reactive printers
+  pigment_prepped_yards: number;// pretreated for Pigment printers
+  reserved_against_pfp: number; // reserved against Dye Sub / Latex PRs OR queued for pretreatment
+  reserved_against_fr: number;  // reserved against Fiber Reactive PRs
+  reserved_against_pigment: number;// reserved against Pigment PRs
   low_stock_threshold: number;
 };
 
@@ -35,10 +41,10 @@ type ScheduledPretreatment = {
   greige_code: string;
   treatment: Treatment;
   yards: number;
-  driven_by: string;     // 'PR-12091' etc.
-  needed_by: string;     // ISO date
+  driven_by: string;
+  needed_by: string;
   status: 'queued' | 'running' | 'completed';
-  scheduled_run: string; // human readable
+  scheduled_run: string;
 };
 
 type PRDemandForecast = {
@@ -49,53 +55,67 @@ type PRDemandForecast = {
   earliest_due: string;
 };
 
+type DirectPrintDemand = {
+  fabric_name: string;
+  process: DirectProcess;
+  yards_needed: number;
+  prs: string[];
+  earliest_due: string;
+};
+
 // =====================================================================
-// Mock data — realistic ADT fabric inventory with pretreatment state
+// Mock data — fabric inventory with PFP / FR / Pigment buckets
 // =====================================================================
 
 const STOCK: FabricInventory[] = [
   { id: 'f1', fabric_name: 'Cotton Sateen 110-thread', greige_code: 'MG-100001', width: '54"',
-    raw_yards: 420, fr_prepped_yards: 145, pigment_prepped_yards: 60,
-    reserved_against_raw: 200, reserved_against_fr: 80, reserved_against_pigment: 30,
+    pfp_yards: 420, fr_prepped_yards: 145, pigment_prepped_yards: 60,
+    reserved_against_pfp: 0, reserved_against_fr: 80, reserved_against_pigment: 30,
     low_stock_threshold: 100 },
   { id: 'f2', fabric_name: 'Cotton Sateen 90-thread',  greige_code: 'MG-100002', width: '54"',
-    raw_yards: 280, fr_prepped_yards: 0, pigment_prepped_yards: 95,
-    reserved_against_raw: 150, reserved_against_fr: 0, reserved_against_pigment: 75,
+    pfp_yards: 280, fr_prepped_yards: 0, pigment_prepped_yards: 95,
+    reserved_against_pfp: 0, reserved_against_fr: 0, reserved_against_pigment: 75,
     low_stock_threshold: 100 },
   { id: 'f3', fabric_name: 'Linen Blend Natural',      greige_code: 'MG-100015', width: '54"',
-    raw_yards: 165, fr_prepped_yards: 88, pigment_prepped_yards: 0,
-    reserved_against_raw: 80, reserved_against_fr: 60, reserved_against_pigment: 0,
+    pfp_yards: 165, fr_prepped_yards: 88, pigment_prepped_yards: 0,
+    reserved_against_pfp: 0, reserved_against_fr: 60, reserved_against_pigment: 0,
     low_stock_threshold: 100 },
   { id: 'f4', fabric_name: 'Newport Cot/Lin',          greige_code: 'MG-100022', width: '54"',
-    raw_yards: 312, fr_prepped_yards: 120, pigment_prepped_yards: 0,
-    reserved_against_raw: 60, reserved_against_fr: 60, reserved_against_pigment: 0,
+    pfp_yards: 312, fr_prepped_yards: 120, pigment_prepped_yards: 0,
+    reserved_against_pfp: 0, reserved_against_fr: 60, reserved_against_pigment: 0,
     low_stock_threshold: 80 },
-  { id: 'f5', fabric_name: 'Velvet Cotton',            greige_code: 'MG-100031', width: '60"',
-    raw_yards: 60, fr_prepped_yards: 0, pigment_prepped_yards: 25,
-    reserved_against_raw: 40, reserved_against_fr: 0, reserved_against_pigment: 25,
-    low_stock_threshold: 80 },
+  { id: 'f5', fabric_name: 'Polyester Sateen Performance', greige_code: 'MG-100031', width: '62"',
+    pfp_yards: 480, fr_prepped_yards: 0, pigment_prepped_yards: 0,
+    reserved_against_pfp: 220, reserved_against_fr: 0, reserved_against_pigment: 0,
+    low_stock_threshold: 150 },
   { id: 'f6', fabric_name: 'Textured Linen',           greige_code: 'MG-100044', width: '54"',
-    raw_yards: 95, fr_prepped_yards: 30, pigment_prepped_yards: 0,
-    reserved_against_raw: 0, reserved_against_fr: 30, reserved_against_pigment: 0,
+    pfp_yards: 95, fr_prepped_yards: 30, pigment_prepped_yards: 0,
+    reserved_against_pfp: 0, reserved_against_fr: 30, reserved_against_pigment: 0,
     low_stock_threshold: 60 },
   { id: 'f7', fabric_name: 'Belgian Linen',            greige_code: 'MG-100051', width: '54"',
-    raw_yards: 0, fr_prepped_yards: 35, pigment_prepped_yards: 0,
-    reserved_against_raw: 0, reserved_against_fr: 35, reserved_against_pigment: 0,
+    pfp_yards: 0, fr_prepped_yards: 35, pigment_prepped_yards: 0,
+    reserved_against_pfp: 0, reserved_against_fr: 35, reserved_against_pigment: 0,
     low_stock_threshold: 80 },
   { id: 'f8', fabric_name: 'Performance Outdoor',      greige_code: 'MG-100062', width: '54"',
-    raw_yards: 220, fr_prepped_yards: 0, pigment_prepped_yards: 80,
-    reserved_against_raw: 60, reserved_against_fr: 0, reserved_against_pigment: 40,
+    pfp_yards: 220, fr_prepped_yards: 0, pigment_prepped_yards: 80,
+    reserved_against_pfp: 90, reserved_against_fr: 0, reserved_against_pigment: 40,
     low_stock_threshold: 100 },
 ];
 
-// PR demand forecast — drives the 'pretreatment needed' suggestions
-const FORECAST: PRDemandForecast[] = [
-  { fabric_name: 'Cotton Sateen 110-thread', process: 'Fiber Reactive prep', yards_needed: 215, prs: ['PR-12091', 'PR-12095', 'PR-12101', 'PR-12104'], earliest_due: '2026-06-22' },
+// PR demand by pretreatment requirement — drives the Pretreatment Schedule
+const PRETREATMENT_FORECAST: PRDemandForecast[] = [
+  { fabric_name: 'Cotton Sateen 110-thread', process: 'Fiber Reactive prep', yards_needed: 215, prs: ['PR-12091', 'PR-12095', 'PR-12101'], earliest_due: '2026-06-22' },
   { fabric_name: 'Cotton Sateen 110-thread', process: 'Pigment prep',        yards_needed:  45, prs: ['PR-12087'], earliest_due: '2026-06-24' },
   { fabric_name: 'Linen Blend Natural',      process: 'Fiber Reactive prep', yards_needed: 130, prs: ['PR-12089', 'PR-12099'], earliest_due: '2026-06-23' },
   { fabric_name: 'Newport Cot/Lin',          process: 'Fiber Reactive prep', yards_needed:  80, prs: ['PR-12092'], earliest_due: '2026-06-25' },
-  { fabric_name: 'Velvet Cotton',            process: 'Pigment prep',        yards_needed:  60, prs: ['PR-12102', 'PR-12108'], earliest_due: '2026-06-26' },
+  { fabric_name: 'Cotton Sateen 90-thread',  process: 'Pigment prep',        yards_needed:  60, prs: ['PR-12102'], earliest_due: '2026-06-26' },
   { fabric_name: 'Belgian Linen',            process: 'Fiber Reactive prep', yards_needed:  75, prs: ['PR-12106'], earliest_due: '2026-06-26' },
+];
+
+// Direct-print demand for Dye Sub + Latex — these consume PFP directly
+const DIRECT_PRINT_FORECAST: DirectPrintDemand[] = [
+  { fabric_name: 'Polyester Sateen Performance', process: 'Dye Sublimation', yards_needed: 220, prs: ['PR-12104', 'PR-12107', 'PR-12110'], earliest_due: '2026-06-22' },
+  { fabric_name: 'Performance Outdoor',          process: 'Latex',           yards_needed:  90, prs: ['PR-12108'], earliest_due: '2026-06-25' },
 ];
 
 const PRETREATMENT_QUEUE: ScheduledPretreatment[] = [
@@ -109,8 +129,8 @@ const PRETREATMENT_QUEUE: ScheduledPretreatment[] = [
     treatment: 'Fiber Reactive prep', yards: 80, driven_by: 'PR-12092',
     needed_by: '2026-06-25', status: 'queued', scheduled_run: 'Jun 20 · 08:00' },
   { id: 'pt4', fabric_name: 'Cotton Sateen 90-thread', greige_code: 'MG-100002',
-    treatment: 'Pigment prep', yards: 60, driven_by: 'Replenish stock buffer',
-    needed_by: '2026-06-21', status: 'completed', scheduled_run: 'Yesterday · 16:30' },
+    treatment: 'Pigment prep', yards: 60, driven_by: 'PR-12102 · stock buffer',
+    needed_by: '2026-06-26', status: 'queued', scheduled_run: 'Jun 21 · 10:00' },
 ];
 
 // =====================================================================
@@ -118,28 +138,37 @@ const PRETREATMENT_QUEUE: ScheduledPretreatment[] = [
 // =====================================================================
 
 const available = (i: FabricInventory) => ({
-  raw: Math.max(0, i.raw_yards - i.reserved_against_raw),
+  pfp: Math.max(0, i.pfp_yards - i.reserved_against_pfp),
   fr: Math.max(0, i.fr_prepped_yards - i.reserved_against_fr),
   pigment: Math.max(0, i.pigment_prepped_yards - i.reserved_against_pigment),
-  total: Math.max(0, i.raw_yards + i.fr_prepped_yards + i.pigment_prepped_yards
-    - i.reserved_against_raw - i.reserved_against_fr - i.reserved_against_pigment),
+  total: Math.max(0, i.pfp_yards + i.fr_prepped_yards + i.pigment_prepped_yards
+    - i.reserved_against_pfp - i.reserved_against_fr - i.reserved_against_pigment),
 });
 
 const stockStatus = (i: FabricInventory): { label: string; color: 'red' | 'yellow' | 'green' } => {
-  const total = i.raw_yards + i.fr_prepped_yards + i.pigment_prepped_yards;
+  const total = i.pfp_yards + i.fr_prepped_yards + i.pigment_prepped_yards;
   if (total === 0) return { label: 'Out of Stock', color: 'red' };
   if (total < i.low_stock_threshold) return { label: 'Low Stock', color: 'yellow' };
   return { label: 'Available', color: 'green' };
 };
 
-const gapVsForecast = (fabricName: string, process: Treatment) => {
+const pretreatmentGap = (fabricName: string, process: Treatment) => {
   const inv = STOCK.find((s) => s.fabric_name === fabricName);
-  const f = FORECAST.find((x) => x.fabric_name === fabricName && x.process === process);
+  const f = PRETREATMENT_FORECAST.find((x) => x.fabric_name === fabricName && x.process === process);
   if (!inv || !f) return null;
   const a = available(inv);
   const onHand = process === 'Fiber Reactive prep' ? a.fr : a.pigment;
   const gap = f.yards_needed - onHand;
   return { onHand, needed: f.yards_needed, gap, earliest_due: f.earliest_due, prs: f.prs };
+};
+
+const directPrintGap = (fabricName: string) => {
+  const inv = STOCK.find((s) => s.fabric_name === fabricName);
+  const f = DIRECT_PRINT_FORECAST.find((x) => x.fabric_name === fabricName);
+  if (!inv || !f) return null;
+  const a = available(inv);
+  const gap = f.yards_needed - a.pfp;
+  return { onHand: a.pfp, needed: f.yards_needed, gap, earliest_due: f.earliest_due, prs: f.prs, process: f.process };
 };
 
 // =====================================================================
@@ -148,10 +177,10 @@ const gapVsForecast = (fabricName: string, process: Treatment) => {
 
 export default function Inventory() {
   const totals = STOCK.reduce((acc, i) => ({
-    raw: acc.raw + i.raw_yards,
+    pfp: acc.pfp + i.pfp_yards,
     fr: acc.fr + i.fr_prepped_yards,
     pigment: acc.pigment + i.pigment_prepped_yards,
-  }), { raw: 0, fr: 0, pigment: 0 });
+  }), { pfp: 0, fr: 0, pigment: 0 });
 
   const counts = {
     out: STOCK.filter((i) => stockStatus(i).label === 'Out of Stock').length,
@@ -159,9 +188,8 @@ export default function Inventory() {
     ok: STOCK.filter((i) => stockStatus(i).label === 'Available').length,
   };
 
-  // Aggregate forecast vs pretreated stock to compute "pretreatment backlog yards"
-  const backlogYards = FORECAST.reduce((acc, f) => {
-    const g = gapVsForecast(f.fabric_name, f.process);
+  const backlogYards = PRETREATMENT_FORECAST.reduce((acc, f) => {
+    const g = pretreatmentGap(f.fabric_name, f.process);
     return acc + (g && g.gap > 0 ? g.gap : 0);
   }, 0);
 
@@ -170,17 +198,52 @@ export default function Inventory() {
       <header>
         <h1 className="text-2xl font-bold text-navy-900">Inventory</h1>
         <p className="text-sm text-gray-500 mt-1">
-          Fabric stock with pretreatment state · Raw / Fiber Reactive prepped / Pigment prepped per SKU · upcoming PR demand drives the pretreatment schedule below
+          Fabric stock by process-readiness state · PFP · Fiber Reactive prepped · Pigment prepped · upcoming PR demand drives both the Pretreatment Schedule and the Direct-print PFP allocation below
         </p>
       </header>
+
+      {/* Print-process → fabric-state legend */}
+      <Card>
+        <CardHeader title="How Helm maps print process to required fabric state" />
+        <div className="p-5 grid grid-cols-4 gap-4 text-xs">
+          <ProcessLegend
+            process="Fiber Reactive"
+            printers="MS JP7"
+            required="Fiber Reactive prepped"
+            requiredColor="blue"
+            note="Requires pretreatment from PFP before printing"
+          />
+          <ProcessLegend
+            process="Pigment"
+            printers="Durst Alpha 330 · Zimmer Colaris"
+            required="Pigment prepped"
+            requiredColor="purple"
+            note="Requires pretreatment from PFP before printing"
+          />
+          <ProcessLegend
+            process="Dye Sublimation"
+            printers="MS JP4-A · MS JP4-B"
+            required="PFP (direct)"
+            requiredColor="green"
+            note="No further pretreatment · prints on PFP fabric directly · output is transfer paper → heat press"
+          />
+          <ProcessLegend
+            process="Latex"
+            printers="HP Latex 800W · HP Latex 830W"
+            required="PFP (direct)"
+            requiredColor="green"
+            note="No further pretreatment · prints on PFP fabric directly"
+          />
+        </div>
+      </Card>
 
       {/* Stats row */}
       <div className="grid grid-cols-5 gap-4">
         <Stat label="Out of Stock" value={counts.out} accent="red" />
         <Stat label="Low Stock" value={counts.low} accent="yellow" />
         <Stat label="Available SKUs" value={counts.ok} accent="green" />
-        <Stat label="Raw / FR / Pigment yds"
-          value={`${totals.raw.toLocaleString()} · ${totals.fr.toLocaleString()} · ${totals.pigment.toLocaleString()}`}
+        <Stat label="PFP / FR / Pigment yds"
+          value={`${totals.pfp.toLocaleString()} · ${totals.fr.toLocaleString()} · ${totals.pigment.toLocaleString()}`}
           accent="blue" small />
         <Stat label="Pretreatment Backlog" value={`${backlogYards} yds`} accent={backlogYards > 0 ? 'red' : 'green'} small />
       </div>
@@ -189,7 +252,7 @@ export default function Inventory() {
       <Card>
         <CardHeader
           title="Fabric Stock"
-          subtitle="Yards available per treatment state · Reserved = already allocated to PRs · Raw can be moved into either treatment bucket"
+          subtitle="Yards available per fabric state · PFP is the mill-prepared stock (directly usable for Dye Sub + Latex; input to pretreatment for FR / Pigment)"
           action={
             <div className="flex gap-2">
               <Button variant="secondary" size="sm"><Plus className="w-3.5 h-3.5 mr-1" />Add Roll</Button>
@@ -203,7 +266,7 @@ export default function Inventory() {
               <tr>
                 <th className="text-left px-4 py-2" rowSpan={2}>Fabric</th>
                 <th className="text-left px-4 py-2" rowSpan={2}>Status</th>
-                <th className="text-center px-3 py-2 border-l border-gray-200" colSpan={2}>Raw</th>
+                <th className="text-center px-3 py-2 border-l border-gray-200" colSpan={2}>PFP <span className="text-[9px] normal-case text-gray-400">(Dye Sub + Latex ready)</span></th>
                 <th className="text-center px-3 py-2 border-l border-gray-200 bg-blue-50" colSpan={2}>Fiber Reactive prepped</th>
                 <th className="text-center px-3 py-2 border-l border-gray-200 bg-purple-50" colSpan={2}>Pigment prepped</th>
                 <th className="text-right px-4 py-2 pr-5 border-l border-gray-200" rowSpan={2}>Action</th>
@@ -230,10 +293,10 @@ export default function Inventory() {
                     <td className="px-4 py-2.5"><Tag color={status.color}>{status.label}</Tag></td>
 
                     <td className="px-2 py-2.5 text-right font-mono border-l border-gray-100">
-                      {i.raw_yards}
-                      <div className="text-[10px] text-gray-400">avail {a.raw}</div>
+                      {i.pfp_yards}
+                      <div className="text-[10px] text-gray-400">avail {a.pfp}</div>
                     </td>
-                    <td className="px-2 py-2.5 text-right font-mono text-gray-500">{i.reserved_against_raw || '—'}</td>
+                    <td className="px-2 py-2.5 text-right font-mono text-gray-500">{i.reserved_against_pfp || '—'}</td>
 
                     <td className="px-2 py-2.5 text-right font-mono border-l border-gray-100 bg-blue-50/40">
                       {i.fr_prepped_yards || <span className="text-gray-300">0</span>}
@@ -257,15 +320,15 @@ export default function Inventory() {
           </table>
         </div>
         <div className="px-5 py-2 border-t border-gray-100 text-[11px] text-gray-500 italic">
-          Treatments: <Tag color="blue">Fiber Reactive prep</Tag> for FR printing · <Tag color="purple">Pigment prep</Tag> for Pigment printing. Raw stock is consumed when an Operator schedules a pretreatment run; pretreated stock is consumed when a PR is routed to a printer.
+          PFP (Prepared For Print) is the as-received state from the mill. It feeds Dye Sublimation and Latex jobs directly. For Fiber Reactive or Pigment jobs, PFP must first be pretreated into the corresponding prepped bucket. The Pretreatment Schedule below shows where PFP→prepped runs need to be scheduled.
         </div>
       </Card>
 
-      {/* Pretreatment Schedule */}
+      {/* Pretreatment Schedule (FR + Pigment demand only) */}
       <Card>
         <CardHeader
           title="Pretreatment Schedule"
-          subtitle="Upcoming PR demand by fabric + process · highlights gaps vs current pretreated stock so the pretreatment line can stay ahead of production"
+          subtitle="Upcoming Fiber Reactive + Pigment PR demand · highlights gaps vs current pretreated stock · drives PFP → prepped runs on the pretreatment line"
         />
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -274,7 +337,7 @@ export default function Inventory() {
                 <th className="text-left px-4 py-2.5">Fabric</th>
                 <th className="text-left px-4 py-2.5">Process / Treatment</th>
                 <th className="text-right px-4 py-2.5">Demand (yds)</th>
-                <th className="text-right px-4 py-2.5">On hand pretreated</th>
+                <th className="text-right px-4 py-2.5">On hand prepped</th>
                 <th className="text-right px-4 py-2.5">Gap</th>
                 <th className="text-left px-4 py-2.5">Earliest due</th>
                 <th className="text-left px-4 py-2.5">Driving PRs</th>
@@ -282,10 +345,9 @@ export default function Inventory() {
               </tr>
             </thead>
             <tbody>
-              {FORECAST.map((f, i) => {
-                const g = gapVsForecast(f.fabric_name, f.process);
+              {PRETREATMENT_FORECAST.map((f, i) => {
+                const g = pretreatmentGap(f.fabric_name, f.process);
                 if (!g) return null;
-                const tone = g.gap > 0 ? 'red' : 'green';
                 return (
                   <tr key={i} className="border-t border-gray-100 hover:bg-gray-50">
                     <td className="px-4 py-2.5 font-semibold">{f.fabric_name}</td>
@@ -316,7 +378,56 @@ export default function Inventory() {
         </div>
         <div className="px-5 py-2 border-t border-gray-100 text-[11px] text-gray-500 italic flex items-center gap-1.5">
           <AlertTriangle className="w-3.5 h-3.5 text-yellow-600" />
-          When the gap row is highlighted, scheduling a pretreatment run BEFORE the earliest-due date prevents the PR from blocking on lack of prepped fabric. The Schedule button creates a queued entry in the Active Pretreatment Queue below.
+          When a gap row is red, scheduling a pretreatment run BEFORE the earliest-due date prevents the PR from blocking on lack of prepped fabric. Dye Sublimation + Latex jobs don't appear here — they print on PFP directly (see Direct-print allocation below).
+        </div>
+      </Card>
+
+      {/* Direct-print allocation (Dye Sub + Latex demand on PFP) */}
+      <Card>
+        <CardHeader
+          title="Direct-print PFP Allocation"
+          subtitle="Dye Sublimation + Latex PR demand consumes PFP directly · no pretreatment needed · this section flags PFP shortages for those processes"
+        />
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-xs text-gray-500 uppercase tracking-wider border-b border-gray-200">
+              <tr>
+                <th className="text-left px-4 py-2.5">Fabric</th>
+                <th className="text-left px-4 py-2.5">Process</th>
+                <th className="text-right px-4 py-2.5">Demand (yds)</th>
+                <th className="text-right px-4 py-2.5">On hand PFP</th>
+                <th className="text-right px-4 py-2.5">Gap</th>
+                <th className="text-left px-4 py-2.5">Earliest due</th>
+                <th className="text-left px-4 py-2.5 pr-5">Driving PRs</th>
+              </tr>
+            </thead>
+            <tbody>
+              {DIRECT_PRINT_FORECAST.map((f, i) => {
+                const g = directPrintGap(f.fabric_name);
+                if (!g) return null;
+                return (
+                  <tr key={i} className="border-t border-gray-100 hover:bg-gray-50">
+                    <td className="px-4 py-2.5 font-semibold">{f.fabric_name}</td>
+                    <td className="px-4 py-2.5"><Tag color="green">{g.process} · PFP</Tag></td>
+                    <td className="px-4 py-2.5 text-right font-mono">{g.needed}</td>
+                    <td className="px-4 py-2.5 text-right font-mono">{g.onHand}</td>
+                    <td className="px-4 py-2.5 text-right">
+                      {g.gap > 0 ? <Tag color="red">{g.gap} short</Tag> : <Tag color="green">covered</Tag>}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs font-mono">{g.earliest_due}</td>
+                    <td className="px-4 py-2.5 text-xs pr-5">
+                      {g.prs.map((pr) => (
+                        <Link key={pr} href="/print-requests/1" className="font-mono text-navy-700 hover:underline mr-2">{pr}</Link>
+                      ))}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="px-5 py-2 border-t border-gray-100 text-[11px] text-gray-500 italic">
+          PFP shortages for direct-print processes are resolved by ordering more fabric from the mill — pretreatment does not help here.
         </div>
       </Card>
 
@@ -362,6 +473,27 @@ export default function Inventory() {
           </tbody>
         </table>
       </Card>
+    </div>
+  );
+}
+
+function ProcessLegend({ process, printers, required, requiredColor, note }: {
+  process: string;
+  printers: string;
+  required: string;
+  requiredColor: 'blue' | 'purple' | 'green';
+  note: string;
+}) {
+  return (
+    <div className="border border-gray-200 rounded p-3">
+      <div className="font-bold text-sm text-navy-900 mb-1">{process}</div>
+      <div className="text-[11px] text-gray-500 mb-2">{printers}</div>
+      <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Required fabric state</div>
+      <div className="mb-2"><Tag color={requiredColor}>{required}</Tag></div>
+      <div className="text-[11px] text-gray-600 italic flex items-start gap-1">
+        <Info className="w-3 h-3 flex-shrink-0 mt-0.5 text-gray-400" />
+        {note}
+      </div>
     </div>
   );
 }

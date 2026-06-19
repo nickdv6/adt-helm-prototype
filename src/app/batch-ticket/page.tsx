@@ -25,11 +25,14 @@ type BatchPR = {
   status: 'queued' | 'scanned' | 'transferred';
 };
 
+// Dye Sublimation flow: MS JP4-A or MS JP4-B prints onto transfer paper, then the design
+// is heat-pressed onto polyester-based fabric. So the batch's 'fabric' here is the
+// destination fabric loaded at the heat press, not what's on the printer.
 const BATCH = {
   batch_id: 'B-2845',
   built_by: 'Julio Vargas',
   built_at: '12 minutes ago',
-  fabric: 'Cotton Sateen 110-thread',
+  fabric: 'Polyester Sateen Performance',
   printer: 'MS JP4-A',
   total_yards: 45,
   destination_press: 'Heat Press #2 (Lucio)',
@@ -43,9 +46,9 @@ const BATCH = {
 
 // Other queued batches awaiting transfer
 const OTHER_BATCHES = [
-  { id: 'B-2846', fabric: 'Linen Blend Natural', total_yards: 32, pr_count: 3, status: 'Awaiting transfer', press: 'Heat Press #1' },
-  { id: 'B-2847', fabric: 'Cotton Sateen 90-thread', total_yards: 28, pr_count: 5, status: 'Awaiting transfer', press: 'Heat Press #2' },
-  { id: 'B-2848', fabric: 'Velvet Cotton', total_yards: 20, pr_count: 2, status: 'Building (Julio)', press: '—' },
+  { id: 'B-2846', fabric: 'Polyester Knit',                total_yards: 32, pr_count: 3, status: 'Awaiting transfer', press: 'Heat Press #1' },
+  { id: 'B-2847', fabric: 'Polyester Sateen Performance',  total_yards: 28, pr_count: 5, status: 'Awaiting transfer', press: 'Heat Press #2' },
+  { id: 'B-2848', fabric: 'Polyester Velour', total_yards: 20, pr_count: 2, status: 'Building (Julio)', press: '—' },
 ];
 
 export default function BatchTicket({ searchParams }: { searchParams: { view?: string } }) {

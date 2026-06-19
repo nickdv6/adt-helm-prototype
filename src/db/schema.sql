@@ -145,6 +145,7 @@ CREATE TABLE IF NOT EXISTS printers (
   workstation_location TEXT,
   status TEXT NOT NULL DEFAULT 'idle', -- idle | running | maintenance
   throughput_yards_per_hour REAL,
+  throughput_notes TEXT, -- Free-text for width-dependent throughput (e.g. Durst Alpha 330: 150 @ 126", 240 @ 62")
   last_maintenance_at TEXT
 );
 

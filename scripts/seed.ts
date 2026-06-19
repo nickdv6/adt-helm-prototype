@@ -142,19 +142,23 @@ fabricNames.forEach((n) =>
 const fabrics = db.prepare('SELECT id, name FROM fabrics').all() as { id: number; name: string }[];
 
 const insPrinter = db.prepare(`
-  INSERT INTO printers (name, model, ink_set, workstation_location, status, throughput_yards_per_hour)
-  VALUES (?, ?, ?, ?, ?, ?)
+  INSERT INTO printers (name, model, ink_set, workstation_location, status, throughput_yards_per_hour, throughput_notes)
+  VALUES (?, ?, ?, ?, ?, ?, ?)
 `);
-// Real ADT printer fleet (7 machines)
-// Per Megan / Julio + WHY interviews: Durst Alpha has long changeovers; MS JP4s are duplicated for capacity
+// Real ADT printer fleet (7 machines) — corrected per Nick (printer spec table)
+// Pretreatment requirements:
+//   - Fiber Reactive printers (MS JP7)         → require Fiber Reactive prepped fabric
+//   - Pigment printers (Durst Alpha 330, Zimmer Colaris) → require Pigment prepped fabric
+//   - Dye Sublimation printers (MS JP4-A, MS JP4-B)      → print on PFP directly (no further pretreatment)
+//   - Latex printers (HP Latex 800W, 830W)               → print on PFP directly (no further pretreatment)
 const printerSpecs = [
-  ['Durst Alpha 330',  'Durst Alpha 330',    'Fiber Reactive', 'Print Room A', 'running',     95],
-  ['MS JP7',           'MS JP7',             'Fiber Reactive', 'Print Room A', 'running',     45],
-  ['MS JP4-A',         'MS JP4',             'Fiber Reactive', 'Print Room B', 'running',     28],
-  ['MS JP4-B',         'MS JP4',             'Pigment',        'Print Room B', 'idle',        28],
-  ['HP Latex 830W',    'HP Latex 830W',      'Latex',          'Print Room C', 'running',     22],
-  ['HP Latex 800W',    'HP Latex 800W',      'Latex',          'Print Room C', 'idle',        18],
-  ['Zimmer Colaris',   'Zimmer Colaris',     'Fiber Reactive', 'Print Room A', 'maintenance', 70],
+  ['Durst Alpha 330',  'Durst Alpha 330',    'Pigment',          'Printer Room A', 'running',     150,  '150 yds/hr @ 126" width · 240 yds/hr @ 62" width'],
+  ['MS JP7',           'MS JP7',             'Fiber Reactive',   'Printer Room B', 'running',     210,  null],
+  ['MS JP4-A',         'MS JP4',             'Dye Sublimation',  'Printer Room C', 'running',     100,  'Transfer paper output → heat press (Lucio) per C24 batch-ticket flow'],
+  ['MS JP4-B',         'MS JP4',             'Dye Sublimation',  'Printer Room C', 'idle',        100,  'Transfer paper output → heat press (Lucio) per C24 batch-ticket flow'],
+  ['Zimmer Colaris',   'Zimmer Colaris',     'Pigment',          'Printer Room B', 'maintenance',  30,  null],
+  ['HP Latex 800W',    'HP Latex 800W',      'Latex',            'Printer Room D', 'idle',         10,  null],
+  ['HP Latex 830W',    'HP Latex 830W',      'Latex',            'Printer Room D', 'running',      10,  null],
 ];
 printerSpecs.forEach((p) => insPrinter.run(...(p as any[])));
 const printers = db.prepare('SELECT id, name, ink_set FROM printers').all() as { id: number; name: string; ink_set: string }[];

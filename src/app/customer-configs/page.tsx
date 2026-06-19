@@ -224,11 +224,11 @@ const stfrankPreset = () => ({
   archive_format: ARCHIVE_FORMATS[0],
   archive_naming: 'stfrank_pl_{order_number}_{YYYYMMDD}.pdf',
   archive_retention_days: '2555',
-  // Cotton Sateen jobs default to MS JP4-A (Fiber Reactive, mid-volume);
-  // Linen Blend Natural overrides to MS JP7 (also Fiber Reactive, higher throughput).
-  default_hot_folder: 'MS JP4-A hot folder',
+  // St. Frank prints on natural-fiber cotton/linen — defaults to MS JP7 (Fiber Reactive · ideal for natural fibers).
+  // Performance Outdoor fabric overrides to HP Latex 830W (Latex prints on PFP directly · best chemistry for outdoor use).
+  default_hot_folder: 'MS JP7 hot folder',
   hot_folder_overrides: [
-    { id: 'ho1', fabric: 'Linen Blend Natural', hot_folder: 'MS JP7 hot folder' },
+    { id: 'ho1', fabric: 'Performance Outdoor', hot_folder: 'HP Latex 830W hot folder' },
   ],
   fulfillment_mode: FULFILLMENT_MODES[0],
   label_mode: LABEL_MODES[4],   // 'N/A (direct-to-customer)' — note: shifted index after Mode D was inserted
