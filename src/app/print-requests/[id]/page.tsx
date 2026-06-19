@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { getDb } from '@/lib/db';
 import { Card, CardHeader, StatusPill, Tag, Button } from '@/components/ui';
 import { formatDate, relativeTime } from '@/lib/utils';
+import { Image as ImageIcon, ExternalLink, RotateCcw, Maximize2 } from 'lucide-react';
 
 // S24 Print Request Detail
 // Surfaces: PR header, parent order, internal proof flow (S23-S32.60),
@@ -132,6 +133,7 @@ export default function PRDetail({ params }: { params: { id: string } }) {
         </div>
 
         <div className="space-y-6">
+          <ArtworkPreview pr={pr} />
           <Card>
             <CardHeader title="Parent Order" />
             <div className="px-5 py-4 text-sm space-y-2">
@@ -164,5 +166,69 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-0.5">{label}</div>
       <div>{children}</div>
     </div>
+  );
+}
+
+// Artwork preview placeholder — would render the design file resolved by C9 (Design File Routing).
+// Path is constructed from the customer's NAS root + folder convention + design/colorway codes.
+function ArtworkPreview({ pr }: { pr: any }) {
+  const designCode = pr.plant_number || pr.design_name || 'unknown';
+  const colorwayCode = pr.colorway_name || 'default';
+  // Mock resolved file — in production this would come from artwork_file_id lookup
+  const fileName = `${designCode}_${colorwayCode}_production.tif`;
+  const nasPath = `\\\\adt-nas\\artwork\\${(pr.company_name || 'customer').toLowerCase().replace(/[^a-z0-9]/g, '-')}\\${designCode}\\${colorwayCode}\\production\\`;
+
+  return (
+    <Card>
+      <CardHeader
+        title="Artwork Preview"
+        subtitle="Design file resolved via C9 routing"
+        action={
+          <button title="Open full-size" className="text-gray-400 hover:text-navy-700">
+            <Maximize2 className="w-4 h-4" />
+          </button>
+        }
+      />
+      <div className="p-4">
+        {/* Preview placeholder — a square box with checkerboard hint to read as an image surface */}
+        <div className="aspect-square w-full rounded border border-gray-300 bg-gray-50 flex items-center justify-center relative overflow-hidden"
+          style={{
+            backgroundImage:
+              'linear-gradient(45deg, #f3f4f6 25%, transparent 25%), linear-gradient(-45deg, #f3f4f6 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #f3f4f6 75%), linear-gradient(-45deg, transparent 75%, #f3f4f6 75%)',
+            backgroundSize: '16px 16px',
+            backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0',
+          }}
+        >
+          <div className="text-center px-4 py-3 bg-white/85 rounded">
+            <ImageIcon className="w-8 h-8 mx-auto text-gray-400 mb-1.5" />
+            <div className="text-xs font-semibold text-gray-700">{pr.design_name || 'Untitled design'}</div>
+            {pr.colorway_name && <div className="text-[11px] text-gray-500 mt-0.5">{pr.colorway_name}</div>}
+            <div className="text-[10px] text-gray-400 mt-1.5 italic">Preview rendered from resolved artwork file</div>
+          </div>
+        </div>
+
+        {/* File metadata */}
+        <div className="mt-3 space-y-1 text-[11px] text-gray-600">
+          <div className="flex items-start gap-1.5">
+            <span className="text-gray-400 font-semibold uppercase tracking-wider min-w-12">File</span>
+            <span className="font-mono break-all">{fileName}</span>
+          </div>
+          <div className="flex items-start gap-1.5">
+            <span className="text-gray-400 font-semibold uppercase tracking-wider min-w-12">Path</span>
+            <span className="font-mono break-all text-[10px] text-gray-500">{nasPath}</span>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="mt-3 flex gap-2">
+          <Button variant="secondary" size="sm" className="flex-1">
+            <ExternalLink className="w-3.5 h-3.5 mr-1" />Open file
+          </Button>
+          <Button variant="ghost" size="sm" className="flex-1">
+            <RotateCcw className="w-3.5 h-3.5 mr-1" />Replace
+          </Button>
+        </div>
+      </div>
+    </Card>
   );
 }
