@@ -23,6 +23,16 @@ type ExceptionRow = {
 };
 
 const EXCEPTIONS: ExceptionRow[] = [
+  { id: 'EX-2421', type: 'Unknown VPN · Master SKU mapping missing', severity: 'high',
+    related: { kind: 'PR', ref: 'PR-12248', href: '/print-requests/1' },
+    default_role: 'csr', owner: null, status: 'Open',
+    opened: '3m ago', sla_clock: '57m to escalate', sla_state: 'warn',
+    notes: 'St Frank order line carries VPN "ST-UNKNOWN-9999" — not in master SKU table. Insert Requirement cannot be derived; CUT label would print without it. CSR must add to master SKUs or correct the VPN.' },
+  { id: 'EX-2420', type: 'Composite Generation Failure', severity: 'high',
+    related: { kind: 'PR', ref: 'PR-12086', href: '/print-requests/1' },
+    default_role: 'colorist', owner: 'Jeannine R.', status: 'In Progress',
+    opened: '7m ago', sla_clock: '53m to escalate', sla_state: 'warn',
+    notes: 'Traveler Compositing Engine failed for PR-12086 (Kravet PO 2581754) — source artwork not found at expected NAS path. Composite + Traveler QR not yet generated; XML submission blocked.' },
   { id: 'EX-2419', type: 'Pre-Ship Identity Mismatch', severity: 'critical',
     related: { kind: 'Shipment', ref: 'SHIP-8842', href: '/shipping' },
     default_role: 'shipping', owner: 'Lucio H.', status: 'In Progress',

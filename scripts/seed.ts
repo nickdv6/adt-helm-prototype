@@ -252,6 +252,50 @@ pkgCombos.forEach((p) => {
   }
 });
 
+// ============================================================
+// Master SKUs — customer VPN → product type mapping (drives Insert Requirement)
+// ============================================================
+console.log('Seeding master SKUs (St Frank + others)...');
+import { PRODUCT_TYPE_TO_INSERT } from '../src/lib/insert-mapping';
+const insMasterSku = db.prepare(`
+  INSERT INTO master_skus (vpn, product_type, insert_key, customer_id, notes)
+  VALUES (?, ?, ?, ?, ?)
+`);
+const stFrank = companies.find((c) => c.name === 'St Frank');
+const havenly = companies.find((c) => c.name === 'Inside') ?? companies.find((c) => c.name === 'Havenly');
+const masterSkuRows: Array<[string, string, string | null, number | null, string | null]> = [
+  // St Frank — full pillow + non-pillow range
+  ['ST-PIL-1216-OUT', 'PIL_12x16_OUT', PRODUCT_TYPE_TO_INSERT['PIL_12x16_OUT'] ?? null, stFrank?.id ?? null, null],
+  ['ST-PIL-1216-IN',  'PIL_12x16_IN',  PRODUCT_TYPE_TO_INSERT['PIL_12x16_IN']  ?? null, stFrank?.id ?? null, null],
+  ['ST-PIL-1818-OUT', 'PIL_18x18_OUT', PRODUCT_TYPE_TO_INSERT['PIL_18x18_OUT'] ?? null, stFrank?.id ?? null, null],
+  ['ST-PIL-1818-IN',  'PIL_18x18_IN',  PRODUCT_TYPE_TO_INSERT['PIL_18x18_IN']  ?? null, stFrank?.id ?? null, null],
+  ['ST-PIL-2020-IN',  'PIL_20x20_IN',  PRODUCT_TYPE_TO_INSERT['PIL_20x20_IN']  ?? null, stFrank?.id ?? null, null],
+  ['ST-PIL-2222-OUT', 'PIL_22x22_OUT', PRODUCT_TYPE_TO_INSERT['PIL_22x22_OUT'] ?? null, stFrank?.id ?? null, null],
+  ['ST-PIL-2222-IN',  'PIL_22x22_IN',  PRODUCT_TYPE_TO_INSERT['PIL_22x22_IN']  ?? null, stFrank?.id ?? null, null],
+  ['ST-PIL-2626-OUT', 'PIL_26x26_OUT', PRODUCT_TYPE_TO_INSERT['PIL_26x26_OUT'] ?? null, stFrank?.id ?? null, null],
+  ['ST-PIL-2626-IN',  'PIL_26x26_IN',  PRODUCT_TYPE_TO_INSERT['PIL_26x26_IN']  ?? null, stFrank?.id ?? null, null],
+  ['ST-NAP-2020',     'NAPKIN_20x20',  null, stFrank?.id ?? null, 'Non-pillow · NO INSERT'],
+  ['ST-RUN-72',       'TABLE_RUNNER_72', null, stFrank?.id ?? null, 'Non-pillow · NO INSERT'],
+  ['ST-TBL-60R',      'TABLECLOTH_60_ROUND', null, stFrank?.id ?? null, 'Non-pillow · NO INSERT'],
+  // Inside / Havenly — pillows only (e-commerce stored inventory pattern)
+  ['IH-CYP-PIL-18',   'PIL_18x18_OUT', PRODUCT_TYPE_TO_INSERT['PIL_18x18_OUT'] ?? null, havenly?.id ?? null, null],
+  ['IH-CYP-PIL-22',   'PIL_22x22_OUT', PRODUCT_TYPE_TO_INSERT['PIL_22x22_OUT'] ?? null, havenly?.id ?? null, null],
+  ['IH-MAR-PIL-14',   'PIL_16x26_IN',  PRODUCT_TYPE_TO_INSERT['PIL_16x26_IN']  ?? null, havenly?.id ?? null, null],
+];
+masterSkuRows.forEach((r) => insMasterSku.run(...r));
+const masterByVpn = new Map<string, { product_type: string; insert_key: string | null }>();
+masterSkuRows.forEach(([vpn, pt, ik]) => masterByVpn.set(vpn, { product_type: pt, insert_key: ik }));
+
+// Pool of VPNs by customer used when seeding order lines (mix of mapped + intentionally unmapped
+// VPNs so the Unknown-VPN exception path is exercised in mock data).
+const vpnsByCustomerName: Record<string, string[]> = {
+  'St Frank': ['ST-PIL-2222-OUT', 'ST-PIL-1818-IN', 'ST-PIL-2020-IN', 'ST-PIL-2626-OUT',
+               'ST-NAP-2020', 'ST-RUN-72', 'ST-TBL-60R',
+               'ST-UNKNOWN-9999'  /* intentionally unmapped — exercises mapping_status='unmapped' */],
+  'Inside':   ['IH-CYP-PIL-18', 'IH-CYP-PIL-22', 'IH-MAR-PIL-14'],
+  'Havenly':  ['IH-CYP-PIL-18', 'IH-CYP-PIL-22'],
+};
+
 console.log('Seeding orders + lines + PRs (last 18 months)...');
 const insOrder = db.prepare(`
   INSERT INTO orders (order_number, company_id, primary_contact_id, ship_to_address_id, roadmap,
@@ -269,16 +313,19 @@ const PRE_APPROVAL_STATUSES = new Set([
 ]);
 const insLine = db.prepare(`
   INSERT INTO order_lines (order_id, sku_id, design_id, colorway_id, fabric_id, quantity, quantity_unit, unit_price,
-    strike_off_classification, colorist_user_id, is_click_and_print)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    strike_off_classification, colorist_user_id, is_click_and_print,
+    vpn, product_type_from_master, insert_required, master_sku_mapping_status)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 const insPR = db.prepare(`
   INSERT INTO print_requests (pr_number, order_line_id, printer_id, fabric_id, print_process, status,
     planned_yardage, printed_yardage, strike_off_classification, colorist_user_id,
     is_click_and_print, was_csv_auto_routed, internal_proof_status, internal_proof_requested_at,
     internal_proof_resolved_at, internal_proof_resolved_by_user_id, hot_folder_target, scheduled_at,
-    assigned_to_user_id, created_at)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    assigned_to_user_id, created_at,
+    traveler_qr_payload, traveler_composite_status, traveler_composite_file_path,
+    composite_generated_at, composite_error)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
 
 // Rolls are created at pack-out time only. Multi-roll-per-PR is the norm with overage/underage.
@@ -419,12 +466,24 @@ for (let i = 0; i < totalOrders; i++) {
 
     const isCAP = classification !== 'Customer Strike-Off Required' && r < 0.2 ? 1 : 0;
 
+    // VPN + master-SKU mapping. Customers like St Frank, Inside, Havenly have a VPN pool to draw
+    // from; everyone else gets no VPN. The 'ST-UNKNOWN-9999' VPN intentionally has no master row
+    // so the master_sku_mapping_status = 'unmapped' exception path is exercised.
+    const customerName = co.name;
+    const vpnPool = vpnsByCustomerName[customerName] || [];
+    const vpn = vpnPool.length > 0 ? faker.helpers.arrayElement(vpnPool) : null;
+    const masterRow = vpn ? masterByVpn.get(vpn) ?? null : null;
+    const productTypeFromMaster = masterRow?.product_type ?? null;
+    const insertRequired = masterRow?.insert_key ?? null;
+    const mappingStatus = !vpn ? 'no_vpn' : (masterRow ? 'mapped' : 'unmapped');
+
     const lineRes = insLine.run(
       orderId, sku.id, design.id, colorway?.id ?? null, sku.fabric_id, qty,
       sku.product_type === 'yardage' ? 'yards' : 'units',
       unitPrice, classification,
       classification.includes('Customer') ? userByRole['colorist'] : null,
       isCAP,
+      vpn, productTypeFromMaster, insertRequired, mappingStatus,
     );
     const lineId = lineRes.lastInsertRowid as number;
 
@@ -450,6 +509,42 @@ for (let i = 0; i < totalOrders; i++) {
       'HP Latex 830W':   COLORIST_MAYA,
     };
     const prAssignedTo = colorByPrinterName[printer.name] ?? COLORIST_JEANNINE;
+    // Traveler Compositing — composite is generated once PR has reached at least 'Scheduled'.
+    // Most generate cleanly ('generated'); a small fraction fail to exercise the exception path.
+    // Composite NOT required when there's no VPN to encode AND it's a yardage product (e.g.
+    // bulk yardage without a CUT-station downstream step). For prototype: generate for every
+    // non-yardage product OR any product on a CSV-intake customer.
+    const compositeApplicable = sku.product_type !== 'yardage' || isAutoRouted;
+    const compositeReached = ['Scheduled', 'Printing', 'Printed', 'Complete'].includes(prStatus);
+    let compositeStatus: string = 'not_required';
+    let compositeFilePath: string | null = null;
+    let compositeGeneratedAt: string | null = null;
+    let compositeError: string | null = null;
+    const prNumberStr = `PR-${prCounter}`;
+    let qrPayload: string | null = null;
+    if (compositeApplicable) {
+      if (compositeReached) {
+        // 8% failure rate to seed the Exception path
+        if (Math.random() < 0.08) {
+          compositeStatus = 'failed';
+          compositeError = faker.helpers.arrayElement([
+            'Source artwork not found at expected NAS path',
+            'QR encode failed — payload exceeded 96 char limit',
+            'Color profile mismatch — composite library refused to render',
+            'Hot folder unreachable at write time',
+          ]);
+        } else {
+          compositeStatus = 'generated';
+          compositeFilePath = `\\\\adt-nas\\composites\\${orderNum}\\${prNumberStr}.tif`;
+          compositeGeneratedAt = faker.date.recent({ days: 2 }).toISOString();
+        }
+        // Traveler QR payload — minimal: PO# / Order ID (extensible later)
+        qrPayload = orderNum;
+      } else {
+        compositeStatus = 'pending';
+      }
+    }
+
     const prRes = insPR.run(
       `PR-${prCounter++}`, lineId, printer.id, sku.fabric_id,
       printer.ink_set.toLowerCase().replace(/ /g, '_'),
@@ -465,6 +560,7 @@ for (let i = 0; i < totalOrders; i++) {
         ? faker.date.recent({ days: 3 }).toISOString() : null,
       prAssignedTo,
       createdAt,
+      qrPayload, compositeStatus, compositeFilePath, compositeGeneratedAt, compositeError,
     );
     const prId = prRes.lastInsertRowid as number;
 

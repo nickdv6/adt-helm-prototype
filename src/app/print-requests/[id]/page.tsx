@@ -3,7 +3,8 @@ import { notFound } from 'next/navigation';
 import { getDb } from '@/lib/db';
 import { Card, CardHeader, StatusPill, Tag, Button } from '@/components/ui';
 import { formatDate, relativeTime } from '@/lib/utils';
-import { Image as ImageIcon, ExternalLink, RotateCcw, Maximize2 } from 'lucide-react';
+import { Image as ImageIcon, ExternalLink, RotateCcw, Maximize2, ScanLine, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { insertDisplay } from '@/lib/insert-mapping';
 
 // S24 Print Request Detail
 // Surfaces: PR header, parent order, internal proof flow (S23-S32.60),
@@ -15,6 +16,7 @@ export default function PRDetail({ params }: { params: { id: string } }) {
   const id = parseInt(params.id);
   const pr = db.prepare(`
     SELECT pr.*, ol.order_id, ol.quantity as line_qty, ol.strike_off_classification as line_class,
+           ol.vpn, ol.product_type_from_master, ol.insert_required, ol.master_sku_mapping_status,
            o.order_number, o.status as order_status, o.is_rush,
            c.name as company_name,
            d.plant_number, d.name as design_name,
@@ -97,6 +99,87 @@ export default function PRDetail({ params }: { params: { id: string } }) {
         </Card>
       )}
 
+      {/* Traveler QR + Composite status card */}
+      {pr.traveler_composite_status && pr.traveler_composite_status !== 'not_required' && (
+        <Card className={pr.traveler_composite_status === 'failed' ? 'border-red-300' : ''}>
+          <CardHeader
+            title="Traveler QR · Composite"
+            subtitle="QR printed below the artwork · payload = lookup key · Compositing Engine generates composite file before XML routes to hot folder"
+            action={
+              pr.traveler_composite_status === 'failed'
+                ? <Button size="sm" variant="ghost"><RotateCcw className="w-3.5 h-3.5 mr-1" />Retry composite</Button>
+                : null
+            }
+          />
+          <div className="px-5 py-3 grid grid-cols-3 gap-4 text-sm">
+            <Field label="Traveler QR payload">
+              {pr.traveler_qr_payload
+                ? <span className="font-mono text-navy-700 font-semibold">{pr.traveler_qr_payload}</span>
+                : <span className="text-gray-400 italic">not assigned yet</span>}
+            </Field>
+            <Field label="Composite status">
+              {pr.traveler_composite_status === 'generated' && <span className="inline-flex items-center gap-1 text-green-700"><CheckCircle2 className="w-3.5 h-3.5" />Generated</span>}
+              {pr.traveler_composite_status === 'pending' && <span className="inline-flex items-center gap-1 text-blue-700"><ScanLine className="w-3.5 h-3.5" />Pending</span>}
+              {pr.traveler_composite_status === 'failed' && <span className="inline-flex items-center gap-1 text-red-700"><AlertTriangle className="w-3.5 h-3.5" />Failed</span>}
+            </Field>
+            <Field label="Generated">
+              {pr.composite_generated_at ? relativeTime(pr.composite_generated_at) : <span className="text-gray-400">—</span>}
+            </Field>
+            <Field label="Composite file path" full>
+              {pr.traveler_composite_file_path
+                ? <span className="font-mono text-xs text-gray-600 break-all">{pr.traveler_composite_file_path}</span>
+                : <span className="text-gray-400 italic">—</span>}
+            </Field>
+            {pr.composite_error && (
+              <Field label="Error" full>
+                <span className="text-red-700 text-xs italic">{pr.composite_error}</span>
+              </Field>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {/* CUT Station context card — VPN + insert requirement (used at the CUT station scan flow) */}
+      <Card>
+        <CardHeader
+          title="CUT Station Context · VPN + Insert Requirement"
+          subtitle="Master SKU mapping drives the Insert Requirement printed on each CUT label · Unknown VPN raises an exception"
+          action={
+            <Link href="/cut-station">
+              <Button size="sm" variant="secondary"><ScanLine className="w-3.5 h-3.5 mr-1" />Open CUT Station →</Button>
+            </Link>
+          }
+        />
+        <div className="px-5 py-3 grid grid-cols-4 gap-4 text-sm">
+          <Field label="VPN">
+            {pr.vpn
+              ? <span className="font-mono">{pr.vpn}</span>
+              : <span className="text-gray-400 italic">no VPN on this line</span>}
+          </Field>
+          <Field label="Product Type (master)">
+            {pr.product_type_from_master
+              ? <span className="font-mono text-xs">{pr.product_type_from_master}</span>
+              : <span className="text-gray-400">—</span>}
+          </Field>
+          <Field label="Insert Requirement">
+            {(() => {
+              const display = insertDisplay(pr.product_type_from_master, pr.insert_required);
+              const isNoInsert = display === 'NO INSERT';
+              return (
+                <span className={`font-mono ${isNoInsert ? 'text-gray-600 uppercase tracking-wider font-semibold' : 'text-navy-700 font-semibold'}`}>
+                  {display}
+                </span>
+              );
+            })()}
+          </Field>
+          <Field label="Master SKU mapping">
+            {pr.master_sku_mapping_status === 'mapped' && <Tag color="green">Mapped</Tag>}
+            {pr.master_sku_mapping_status === 'unmapped' && <Tag color="red">Unknown VPN</Tag>}
+            {pr.master_sku_mapping_status === 'no_vpn' && <Tag color="gray">No VPN</Tag>}
+          </Field>
+        </div>
+      </Card>
+
       <div className="grid grid-cols-3 gap-6">
         <div className="col-span-2 space-y-6">
           <Card>
@@ -160,9 +243,9 @@ export default function PRDetail({ params }: { params: { id: string } }) {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children, full }: { label: string; children: React.ReactNode; full?: boolean }) {
   return (
-    <div>
+    <div className={full ? 'col-span-3' : ''}>
       <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-0.5">{label}</div>
       <div>{children}</div>
     </div>

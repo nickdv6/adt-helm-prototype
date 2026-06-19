@@ -3,7 +3,7 @@ import { getDb } from '@/lib/db';
 import { Card, CardHeader, Tag, Button, StatusPill } from '@/components/ui';
 import {
   ArrowRight, Wand2, AlertTriangle, CheckCircle2, Clock, RotateCw, FileText, Printer,
-  ScanLine, Layers, FileWarning, Settings, Activity,
+  ScanLine, Layers, FileWarning, Settings, Activity, ImagePlus,
 } from 'lucide-react';
 
 // /intake — Automated Print Intake Command Center
@@ -134,6 +134,24 @@ const SCAN_FEED: ScanEvent[] = [
   { when: '7 min',   user: 'Yuliana C.',  station: 'Inspection Bench',        action: 'Inspected',      context: 'B-12085-A · Pass with Notes',      bundle_qr: 'BQ-12085-A' },
   { when: '11 min',  user: 'Lucio H.',    station: 'Packing Bench',           action: 'Packed',         context: 'B-12082-B · into roll 100',        bundle_qr: 'BQ-12082-B' },
   { when: '14 min',  user: 'Maya C.',     station: 'Tenter Frame',            action: 'Tentered',       context: 'PR-12080 · dimensional check ok',  fabric_output_qr: 'FQ-7711-2204' },
+];
+
+type CompositeEvent = {
+  when: string;
+  pr_number: string;
+  customer: string;
+  qr_payload: string;
+  status: 'generated' | 'pending' | 'failed';
+  detail: string;
+};
+
+const COMPOSITES: CompositeEvent[] = [
+  { when: 'just now',  pr_number: 'PR-12104', customer: 'Havenly',     qr_payload: 'ADT-4742', status: 'generated', detail: '\\\\adt-nas\\composites\\ADT-4742\\PR-12104.tif (composite + QR + metadata strip)' },
+  { when: '2 min ago', pr_number: 'PR-12101', customer: 'St. Frank',   qr_payload: 'ADT-4506', status: 'generated', detail: '\\\\adt-nas\\composites\\ADT-4506\\PR-12101.tif' },
+  { when: '5 min ago', pr_number: 'PR-12097', customer: 'Laura Park',  qr_payload: 'ADT-4619', status: 'pending',   detail: 'In queue · awaiting source artwork retrieval' },
+  { when: '11 min',    pr_number: 'PR-12086', customer: 'Kravet',      qr_payload: '2581754',  status: 'failed',    detail: 'Source artwork not found at expected NAS path — Composite Generation Failure exception raised' },
+  { when: '18 min',    pr_number: 'PR-12082', customer: 'St. Frank',   qr_payload: 'ADT-4500', status: 'generated', detail: '\\\\adt-nas\\composites\\ADT-4500\\PR-12082.tif' },
+  { when: '32 min',    pr_number: 'PR-12080', customer: 'Lemieux',     qr_payload: 'ADT-4488', status: 'failed',    detail: 'QR encode failed — payload exceeded 96 char limit (current payload includes extended metadata in error)' },
 ];
 
 // Top-level metrics
@@ -320,6 +338,63 @@ export default function IntakeCommandCenter() {
           </div>
         </Card>
       </div>
+
+      {/* Traveler Compositing Engine */}
+      <Card>
+        <CardHeader
+          title="Traveler Compositing Engine · Recent Composites"
+          subtitle="Generates the composite print asset (original artwork + Traveler QR + human-readable metadata strip) before XML is routed to the printer's hot folder · reusable across customers · failures surface here as exceptions"
+          action={
+            <span className="inline-flex items-center gap-1.5 text-xs text-gray-500">
+              <ImagePlus className="w-3.5 h-3.5 text-navy-700" />
+              Composite library
+            </span>
+          }
+        />
+        <table className="w-full text-xs">
+          <thead className="text-gray-500 uppercase tracking-wider border-b border-gray-200 bg-gray-50">
+            <tr>
+              <th className="text-left px-3 py-2">When</th>
+              <th className="text-left px-3 py-2">PR</th>
+              <th className="text-left px-3 py-2">Customer</th>
+              <th className="text-left px-3 py-2">QR Payload</th>
+              <th className="text-left px-3 py-2">Status</th>
+              <th className="text-left px-3 py-2">Composite file / Error</th>
+              <th className="text-right px-3 py-2 pr-3">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {COMPOSITES.map((c, i) => (
+              <tr key={i} className="border-t border-gray-100 hover:bg-gray-50">
+                <td className="px-3 py-1.5 text-gray-500">{c.when}</td>
+                <td className="px-3 py-1.5">
+                  <Link href="/print-requests/1" className="font-mono font-semibold text-navy-700 hover:underline">{c.pr_number}</Link>
+                </td>
+                <td className="px-3 py-1.5">{c.customer}</td>
+                <td className="px-3 py-1.5 font-mono">{c.qr_payload}</td>
+                <td className="px-3 py-1.5">
+                  {c.status === 'generated' && <Tag color="green">Generated</Tag>}
+                  {c.status === 'pending' && <Tag color="blue">Pending</Tag>}
+                  {c.status === 'failed' && <Tag color="red">Failed</Tag>}
+                </td>
+                <td className="px-3 py-1.5">
+                  {c.status === 'failed'
+                    ? <span className="text-red-700 italic">{c.detail}</span>
+                    : <span className="font-mono text-[10px] text-gray-500 break-all">{c.detail}</span>}
+                </td>
+                <td className="px-3 py-1.5 text-right pr-3">
+                  {c.status === 'failed' && <Button size="sm" variant="ghost"><RotateCw className="w-3 h-3 mr-1" />Retry</Button>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="px-4 py-2 border-t border-gray-100 text-[11px] text-gray-500 italic">
+          <strong>Traveler QR payload</strong> is the lookup key (today: PO# / Order ID; extensible to PR# / line id / customer / VPN / fabric).
+          Printed text near the QR is display metadata only — never baked into the QR itself.
+          The Compositing Engine runs per customer via the routing rules in <Link href="/customer-configs" className="text-navy-700 hover:underline">Customer Configs</Link>.
+        </div>
+      </Card>
 
       {/* Scan Event Engine */}
       <Card>

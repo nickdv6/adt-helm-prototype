@@ -295,6 +295,11 @@ CREATE TABLE IF NOT EXISTS order_lines (
   strike_off_classification TEXT NOT NULL DEFAULT 'Pending Review', -- OD-9 6-option enum
   colorist_user_id INTEGER,
   is_click_and_print INTEGER NOT NULL DEFAULT 0, -- S23-S32.62
+  -- Customer VPN + master-SKU mapping (drives Insert Requirement + CUT label content)
+  vpn TEXT,                                       -- Customer's product code as it appears in the daily CSV/XML
+  product_type_from_master TEXT,                  -- Resolved via master_skus join (e.g. 'PIL_22x22_OUT', 'NAPKIN_20x20')
+  insert_required TEXT,                           -- e.g. '26x26-NW'. NULL when product type has no insert (non-pillow).
+  master_sku_mapping_status TEXT DEFAULT 'no_vpn',-- 'mapped' | 'unmapped' (VPN exists but not in master) | 'no_vpn'
   FOREIGN KEY (order_id) REFERENCES orders(id),
   FOREIGN KEY (sku_id) REFERENCES skus(id),
   FOREIGN KEY (design_id) REFERENCES designs(id),
@@ -302,6 +307,45 @@ CREATE TABLE IF NOT EXISTS order_lines (
   FOREIGN KEY (fabric_id) REFERENCES fabrics(id),
   FOREIGN KEY (colorist_user_id) REFERENCES users(id)
 );
+
+-- ============================================================
+-- MASTER SKU table — customer VPN → ADT product type mapping
+-- ============================================================
+-- One row per customer VPN. product_type drives Insert Requirement via the static
+-- insert-mapping module in src/lib/insert-mapping.ts. insert_key is denormalized here
+-- so query-time lookups don't need to recompute. Refreshed on master SKU import.
+CREATE TABLE IF NOT EXISTS master_skus (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  vpn TEXT NOT NULL UNIQUE,
+  product_type TEXT NOT NULL,                     -- e.g. 'PIL_22x22_OUT', 'NAPKIN_20x20', 'TABLE_RUNNER_72'
+  insert_key TEXT,                                -- e.g. '26x26-NW'. NULL when product_type has no insert.
+  customer_id INTEGER,                            -- optional: some VPNs may be customer-specific
+  notes TEXT,
+  last_updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (customer_id) REFERENCES companies(id)
+);
+CREATE INDEX IF NOT EXISTS idx_master_skus_vpn ON master_skus(vpn);
+
+-- ============================================================
+-- CUT LABELS — printed by Zebra ZT400 at the CUT station
+-- ============================================================
+-- One row per label printed. QR payload + display text snapshot kept for audit.
+CREATE TABLE IF NOT EXISTS cut_labels (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_line_id INTEGER NOT NULL,
+  pr_id INTEGER,                                  -- nullable: label can be printed even if PR not yet created
+  printed_at TEXT NOT NULL DEFAULT (datetime('now')),
+  printer_name TEXT,                              -- e.g. 'Zebra ZT400 · CUT Station A'
+  operator_user_id INTEGER,
+  print_status TEXT NOT NULL DEFAULT 'printed',   -- 'printed' | 'failed' | 'reprinted'
+  reprint_count INTEGER NOT NULL DEFAULT 0,
+  qr_payload TEXT NOT NULL,                       -- Same payload as Traveler QR (lookup key)
+  display_text_json TEXT,                         -- Snapshot of PO#, VPN, Qty, Insert/NO INSERT for audit
+  FOREIGN KEY (order_line_id) REFERENCES order_lines(id),
+  FOREIGN KEY (pr_id) REFERENCES print_requests(id),
+  FOREIGN KEY (operator_user_id) REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS idx_cut_labels_pr_id ON cut_labels(pr_id);
 
 -- ============================================================
 -- PRINT REQUEST (19 statuses incl. Pending Internal Proof)
@@ -322,6 +366,16 @@ CREATE TABLE IF NOT EXISTS print_requests (
   rip_recalled INTEGER NOT NULL DEFAULT 0,
   rip_recall_acknowledged_at TEXT,
   assigned_to_user_id INTEGER, -- Currently responsible owner (colorist / print op / etc.). Drives 'Assigned To' filter on dashboards.
+  -- Traveler Compositing Engine fields (S35-Traveler):
+  -- The Traveler QR is the small QR printed BELOW the artwork on each print. The QR payload
+  -- is the lookup key (PO#/order id today, extensible to PR# / line id / customer / VPN / fabric).
+  -- The Traveler Compositing Engine produces a composite file = original artwork + Traveler QR +
+  -- human-readable metadata strip, then routes the composite to the printer's hot folder.
+  traveler_qr_payload TEXT,                          -- Lookup key encoded in the QR (typically order_id or PO#)
+  traveler_composite_status TEXT NOT NULL DEFAULT 'not_required', -- 'not_required' | 'pending' | 'generated' | 'failed'
+  traveler_composite_file_path TEXT,                 -- UNC path to the composite PRN/TIFF/PDF
+  composite_generated_at TEXT,
+  composite_error TEXT,                              -- Free-text on failure ('missing artwork', 'QR encode failed', etc.)
   strike_off_classification TEXT, -- inherited from Order Line; editable
   colorist_user_id INTEGER,
   is_click_and_print INTEGER NOT NULL DEFAULT 0,

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Home, FileText, Layers, Truck, Package, Palette, Printer, Scissors, Settings, Users, Inbox, AlertTriangle, Boxes, Flame, Sliders, FileScan, ClipboardList, CircleDot, Undo2, Brush } from 'lucide-react';
+import { Home, FileText, Layers, Truck, Package, Palette, Printer, Scissors, Settings, Users, Inbox, AlertTriangle, Boxes, Flame, Sliders, FileScan, ClipboardList, CircleDot, Undo2, Brush, ScanLine } from 'lucide-react';
 
 export function Sidebar() {
   return (
@@ -24,6 +24,7 @@ export function Sidebar() {
         <NavItem href="/printer-queue" icon={<Printer className="w-4 h-4" />} label="Printer Queue" />
         <NavItem href="/batch-ticket" icon={<Flame className="w-4 h-4" />} label="Batch Ticket · Heat Press" />
         <NavItem href="/cut-sew" icon={<Scissors className="w-4 h-4" />} label="Cut/Sew Queue" />
+        <NavItem href="/cut-station" icon={<ScanLine className="w-4 h-4" />} label="CUT Station · Scan & Label" />
 
         <Section label="Fulfillment" />
         <NavItem href="/shipping" icon={<Truck className="w-4 h-4" />} label="Shipping" />
