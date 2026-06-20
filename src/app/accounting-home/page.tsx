@@ -12,7 +12,7 @@ export default function AccountingHome() {
 
   // Orders shipped but not yet invoiced — these are ready to invoice
   const readyToInvoice = db.prepare(`
-    SELECT o.id, o.order_number, o.subtotal, c.name as company_name, c.terms,
+    SELECT o.id, o.order_number, o.subtotal, c.name as company_name, c.payment_terms as terms,
            (SELECT MAX(r.shipped_at) FROM pr_rolls r
             JOIN print_requests pr ON r.pr_id = pr.id
             JOIN order_lines ol ON pr.order_line_id = ol.id

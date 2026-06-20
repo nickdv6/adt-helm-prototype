@@ -32,9 +32,9 @@ export default function CSRHome() {
   const todaysIntake = db.prepare(`
     SELECT COUNT(*) as n FROM orders WHERE date(created_at) = date('now')
   `).get() as any;
-  const openExceptions = db.prepare(`
-    SELECT COUNT(*) as n FROM exceptions WHERE status NOT IN ('Resolved','Closed','Cancelled')
-  `).get() as any;
+  // Exception Center uses mock data (no exceptions table in schema yet);
+  // matches the 6-entry sidebar badge + EX-24xx mock array on /exceptions.
+  const openExceptions = { n: 6 };
 
   return (
     <RoleHomeShell

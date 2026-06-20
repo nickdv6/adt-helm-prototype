@@ -11,7 +11,7 @@ export default function InvoiceDetail({ params }: { params: { id: string } }) {
   const db = getDb();
   const orderId = parseInt(params.id);
   const order = db.prepare(`
-    SELECT o.*, c.name as company_name, c.terms, c.id as company_id
+    SELECT o.*, c.name as company_name, c.payment_terms as terms, c.id as company_id
     FROM orders o JOIN companies c ON o.company_id = c.id WHERE o.id = ?
   `).get(orderId) as any;
   if (!order) notFound();
