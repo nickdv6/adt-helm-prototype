@@ -24,7 +24,6 @@ export function Sidebar() {
         <NavItem href="/inventory-home" icon={<UserRound className="w-4 h-4" />} label="Inventory" />
         <NavItem href="/shipping-home" icon={<UserRound className="w-4 h-4" />} label="Shipping" />
         <NavItem href="/receiving-home" icon={<UserRound className="w-4 h-4" />} label="Receiving" />
-        <NavItem href="/accounting-home" icon={<UserRound className="w-4 h-4" />} label="Accounting" />
 
         <Section label="Orders" />
         <NavItem href="/orders" icon={<FileText className="w-4 h-4" />} label="Order Dashboard" />
