@@ -9,6 +9,7 @@ export function RoleHomeShell({
   userName,
   userRole,
   greeting,
+  headerAction,
   kpis,
   queueTitle,
   queueSubtitle,
@@ -20,6 +21,7 @@ export function RoleHomeShell({
   userName: string;
   userRole: string;
   greeting?: string;
+  headerAction?: React.ReactNode;
   kpis: { label: string; value: any; accent?: 'green' | 'yellow' | 'red' | 'blue' }[];
   queueTitle: string;
   queueSubtitle?: string;
@@ -33,12 +35,15 @@ export function RoleHomeShell({
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      <header>
-        <div className="flex items-center gap-3 mb-1">
-          <h1 className="text-2xl font-bold text-navy-900">Good {tod}, {userName.split(' ')[0]}</h1>
-          <Tag color="blue">{userRole}</Tag>
+      <header className="flex items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3 mb-1">
+            <h1 className="text-2xl font-bold text-navy-900">Good {tod}, {userName.split(' ')[0]}</h1>
+            <Tag color="blue">{userRole}</Tag>
+          </div>
+          {greeting && <p className="text-sm text-gray-600 mt-0.5">{greeting}</p>}
         </div>
-        {greeting && <p className="text-sm text-gray-600 mt-0.5">{greeting}</p>}
+        {headerAction}
       </header>
 
       <div className={`grid grid-cols-${kpis.length} gap-4`} style={{ gridTemplateColumns: `repeat(${kpis.length}, minmax(0, 1fr))` }}>

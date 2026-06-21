@@ -1,5 +1,6 @@
 // S12 Receiving Home — Tomás Rivera
 // Mock data — no inbound shipments table in schema yet.
+import Link from 'next/link';
 import { RoleHomeShell } from '@/components/role-home';
 import { getDb } from '@/lib/db';
 import { Tag } from '@/components/ui';
@@ -30,6 +31,12 @@ export default function ReceivingHome() {
       userName={me?.full_name ?? 'Tomás'}
       userRole="Receiving"
       greeting="Inbound shipments to expect and recent receipts. Customer-supplied fabric goes to the Open Bank."
+      headerAction={
+        <Link href="/receiving-home/receive"
+          className="inline-flex items-center px-4 py-2.5 text-sm font-semibold rounded bg-navy-700 text-white hover:bg-navy-900">
+          + Receive Fabric
+        </Link>
+      }
       kpis={[
         { label: 'Inbound today', value: expectedInbound.filter((i) => i.expected === 'today').length, accent: 'yellow' },
         { label: 'This week', value: expectedInbound.length },
