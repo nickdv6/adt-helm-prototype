@@ -7,8 +7,9 @@
 // status is 'Awaiting Test' until both are filled in.
 //
 // Production schema additions needed: a material_receipts table with
-//   id, owner_type (customer|adt), owner_company_id, supplier_mill_name, yardage,
-//   roll_count, condition_notes, sample_cut_taken, po_reference,
+//   id, owner_type (customer|adt), owner_company_id, supplier_mill_name,
+//   ghl_lot_number, po_reference, yardage, roll_count, condition_notes,
+//   sample_cut_taken,
 //   white_point_L, white_point_a, white_point_b, absorbency (pass|fail|null),
 //   tested_at, tested_by_user_id, received_at, received_by_user_id, status
 import { getDb } from '@/lib/db';

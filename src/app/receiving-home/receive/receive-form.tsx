@@ -12,6 +12,7 @@ export function ReceiveForm({ customers }: { customers: { id: number; name: stri
   const [customerId, setCustomerId] = useState<string>('');
   const [supplierName, setSupplierName] = useState('');
   const [millName, setMillName] = useState('');
+  const [ghlLot, setGhlLot] = useState('');
   const [poReference, setPoReference] = useState('');
   const [yardage, setYardage] = useState('');
   const [rollCount, setRollCount] = useState('');
@@ -51,7 +52,7 @@ export function ReceiveForm({ customers }: { customers: { id: number; name: stri
     const code = `INB-${String(Math.floor(3000 + Math.random() * 999)).padStart(4, '0')}`;
     const customerName = customers.find((c) => String(c.id) === customerId)?.name ?? '';
     const owner = ownerType === 'customer' ? `Customer-supplied · ${customerName}` : `ADT-owned · ${supplierName}`;
-    const summary = `${owner} · ${rollCount} rolls / ${yardage} yds${millName ? ` · ${millName}` : ''}`;
+    const summary = `${owner} · ${rollCount} rolls / ${yardage} yds${millName ? ` · ${millName}` : ''}${ghlLot ? ` · GHL LOT# ${ghlLot}` : ''}`;
     setSubmitted({
       receiptCode: code,
       summary,
@@ -65,6 +66,7 @@ export function ReceiveForm({ customers }: { customers: { id: number; name: stri
     setCustomerId('');
     setSupplierName('');
     setMillName('');
+    setGhlLot('');
     setPoReference('');
     setYardage('');
     setRollCount('');
@@ -179,23 +181,31 @@ export function ReceiveForm({ customers }: { customers: { id: number; name: stri
         {/* Quantities */}
         <Card>
           <CardHeader title="Delivery details" />
-          <div className="p-5 grid grid-cols-2 gap-4">
-            <Field label="Mill name (optional)">
-              <input type="text" value={millName} onChange={(e) => setMillName(e.target.value)}
-                placeholder="e.g. Patzeria Mill — Italy" className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full" />
-            </Field>
-            <Field label="PO reference (optional)">
-              <input type="text" value={poReference} onChange={(e) => setPoReference(e.target.value)}
-                placeholder="PO-#### or cust-supply" className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full font-mono" />
-            </Field>
-            <Field label="Total yardage *">
-              <input type="number" min="0" step="0.1" value={yardage} onChange={(e) => setYardage(e.target.value)}
-                placeholder="e.g. 320.5" className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full font-mono" />
-            </Field>
-            <Field label="Number of rolls *">
-              <input type="number" min="0" step="1" value={rollCount} onChange={(e) => setRollCount(e.target.value)}
-                placeholder="e.g. 4" className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full font-mono" />
-            </Field>
+          <div className="p-5 space-y-4">
+            <div className="grid grid-cols-3 gap-4">
+              <Field label="Mill name (optional)">
+                <input type="text" value={millName} onChange={(e) => setMillName(e.target.value)}
+                  placeholder="e.g. Patzeria Mill — Italy" className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full" />
+              </Field>
+              <Field label="GHL LOT# (optional)">
+                <input type="text" value={ghlLot} onChange={(e) => setGhlLot(e.target.value)}
+                  placeholder="e.g. GHL-25048-A" className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full font-mono" />
+              </Field>
+              <Field label="PO reference (optional)">
+                <input type="text" value={poReference} onChange={(e) => setPoReference(e.target.value)}
+                  placeholder="PO-#### or cust-supply" className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full font-mono" />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Total yardage *">
+                <input type="number" min="0" step="0.1" value={yardage} onChange={(e) => setYardage(e.target.value)}
+                  placeholder="e.g. 320.5" className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full font-mono" />
+              </Field>
+              <Field label="Number of rolls *">
+                <input type="number" min="0" step="1" value={rollCount} onChange={(e) => setRollCount(e.target.value)}
+                  placeholder="e.g. 4" className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full font-mono" />
+              </Field>
+            </div>
           </div>
         </Card>
 
