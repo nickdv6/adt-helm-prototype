@@ -8,14 +8,18 @@ import { useRouter, usePathname } from 'next/navigation';
 // Role identities map to home routes. Selecting a role navigates to that role's home
 // and updates the user chip. Persisted to localStorage so the chip survives reloads.
 const ROLES = [
-  { id: 'csr', name: 'Sarah Castillo', initials: 'SC', label: 'CSR', home: '/' },
-  { id: 'prod_mgr', name: 'Megan Burleson', initials: 'MB', label: 'Production Mgr / Owner', home: '/megan' },
+  { id: 'admin', name: 'Nick Del Verme', initials: 'ND', label: 'Admin / Owner', home: '/' },
+  { id: 'prod_mgr', name: 'Megan Burleson', initials: 'MB', label: 'Production Manager', home: '/megan' },
+  { id: 'csr', name: 'Sarah Castillo', initials: 'SC', label: 'CSR', home: '/csr-home' },
   { id: 'colorist', name: 'Jeannine Romero', initials: 'JR', label: 'Colorist', home: '/colorist' },
-  { id: 'print_op', name: 'Julio Vargas', initials: 'JV', label: 'Print Operator', home: '/printer-queue' },
-  { id: 'cut_sew', name: 'Yuliana Cruz', initials: 'YC', label: 'Cut/Sew Lead', home: '/cut-sew' },
-  { id: 'finishing', name: 'Lucio Hernandez', initials: 'LH', label: 'Finishing / Shipping', home: '/shipping' },
+  { id: 'print_op', name: 'Julio Vargas', initials: 'JV', label: 'Print Operator', home: '/print-op-home' },
+  { id: 'finishing', name: 'Lucio Hernandez', initials: 'LH', label: 'Finishing', home: '/finishing-home' },
+  { id: 'cut_sew', name: 'Yuliana Cruz', initials: 'YC', label: 'Cut/Sew', home: '/cut-sew-home' },
+  { id: 'inventory', name: 'Karen Boyd', initials: 'KB', label: 'Inventory / Purchasing', home: '/inventory-home' },
+  { id: 'shipping', name: 'Marcus Hill', initials: 'MH', label: 'Shipping', home: '/shipping-home' },
+  { id: 'receiving', name: 'Tomás Rivera', initials: 'TR', label: 'Receiving', home: '/receiving-home' },
+  { id: 'accounting', name: 'Diana Park', initials: 'DP', label: 'Accounting', home: '/accounting-home' },
   { id: 'sales', name: 'Drew Walters', initials: 'DW', label: 'Sales', home: '/' },
-  { id: 'admin', name: 'Nick Del Verme', initials: 'ND', label: 'Admin / Owner', home: '/megan' },
 ];
 
 export function Topbar() {

@@ -1,223 +1,168 @@
+// Landing page — first thing every reviewer sees. Frames what this prototype is,
+// what's mock vs aspirational, and provides curated entry points so Ali doesn't
+// have to navigate the sidebar to find the meaningful screens.
 import Link from 'next/link';
-import { getDb } from '@/lib/db';
-import { Card, CardHeader, StatusPill, Tag } from '@/components/ui';
-import { formatDate, relativeTime } from '@/lib/utils';
+import { Card, CardHeader, Tag } from '@/components/ui';
+import { ArrowRight, Map, FileText, Stamp, Truck, ScanLine, BarChart3, Sliders, Users, GitBranch, Brush, Inbox as InboxIcon, Calendar, AlertTriangle, Server } from 'lucide-react';
 
-// S04 CSR Home — Sarah's landing page
-// Per Decision S02-S15.1 locked home layout: header + left nav + main work surface + right rail.
-// Time-window default: today + 7 days (Decision 8.10).
-
-export default function CSRHome() {
-  const db = getDb();
-
-  // Aggregate widgets
-  const pendingOrders = db.prepare(`
-    SELECT o.id, o.order_number, c.name as company_name, o.status, o.adt_promised_date, o.created_at
-    FROM orders o JOIN companies c ON o.company_id = c.id
-    WHERE o.status IN ('Draft', 'Submitted', 'Waiting on Customer', 'Waiting on Artwork')
-    ORDER BY o.created_at DESC
-    LIMIT 6
-  `).all() as any[];
-
-  const validationFailures = db.prepare(`
-    SELECT o.id, o.order_number, c.name as company_name, o.source_system, o.created_at
-    FROM orders o JOIN companies c ON o.company_id = c.id
-    WHERE o.status = 'Draft' AND o.source_system NOT IN ('manual')
-    ORDER BY o.created_at DESC LIMIT 4
-  `).all() as any[];
-
-  const approvalPending = db.prepare(`
-    SELECT s.strike_off_number, c.name as company_name, julianday('now') - julianday(s.approval_sent_at) as days_waiting
-    FROM strike_offs s
-    JOIN print_requests pr ON s.print_request_id = pr.id
-    JOIN order_lines ol ON pr.order_line_id = ol.id
-    JOIN orders o ON ol.order_id = o.id
-    JOIN companies c ON o.company_id = c.id
-    WHERE s.status = 'Sent to Customer' OR s.status = 'Waiting for Approval'
-    LIMIT 5
-  `).all() as any[];
-
-  const creditHold = db.prepare(`
-    SELECT id, name FROM companies WHERE is_credit_hold = 1 LIMIT 5
-  `).all() as any[];
-
-  const counts = db.prepare(`
-    SELECT
-      COUNT(*) FILTER (WHERE o.status IN ('Draft','Submitted','Waiting on Customer','Waiting on Artwork')) as pending,
-      COUNT(*) FILTER (WHERE o.status = 'In Production') as in_production,
-      COUNT(*) FILTER (WHERE o.status IN ('Shipped','Invoiced')) as shipped_recent,
-      COUNT(*) FILTER (WHERE o.is_rush = 1 AND o.status NOT IN ('Closed','Cancelled','Shipped','Invoiced')) as rush_open
-    FROM orders o
-  `).get() as any;
-
-  const recentOrders = db.prepare(`
-    SELECT o.id, o.order_number, c.name as company_name, o.status, o.adt_promised_date, o.created_at, o.is_rush
-    FROM orders o JOIN companies c ON o.company_id = c.id
-    WHERE o.primary_csr_user_id = 3 OR 1=1
-    ORDER BY o.created_at DESC LIMIT 10
-  `).all() as any[];
-
+export default function Landing() {
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-navy-900">CSR Home — Sarah Castillo</h1>
-        <p className="text-sm text-gray-500 mt-1">Today + 7 days · default view per Decision 8.10</p>
+    <div className="max-w-6xl mx-auto space-y-8">
+      {/* Hero */}
+      <header className="space-y-3 pt-2">
+        <Tag color="blue">Welcome</Tag>
+        <h1 className="text-3xl font-bold text-navy-900">ADT Helm — clickable blueprint</h1>
+        <p className="text-base text-gray-700 max-w-3xl">
+          This prototype is a navigable mockup of the operational system ADT is building to replace
+          Airtable + DASH. Every screen below is wired against a real schema and seeded with
+          ~250 faker-generated orders so the workflows feel concrete. Nothing here is connected to
+          live data, QuickBooks, Shopify, or any real customer record.
+        </p>
+        <div className="flex gap-2 pt-2">
+          <Link href="/sitemap" className="inline-flex items-center px-4 py-2 text-sm font-semibold rounded bg-navy-700 text-white hover:bg-navy-900">
+            Full sitemap →
+          </Link>
+          <Link href="/changelog" className="inline-flex items-center px-4 py-2 text-sm font-semibold rounded bg-white text-navy-700 border border-gray-300 hover:bg-gray-50">
+            What&apos;s new
+          </Link>
+        </div>
       </header>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-4 gap-4">
-        <StatCard label="Pending CSR Action" value={counts.pending} accent="yellow" />
-        <StatCard label="In Production" value={counts.in_production} accent="blue" />
-        <StatCard label="Shipped Last 30d" value={counts.shipped_recent} accent="green" />
-        <StatCard label="Open Rush Orders" value={counts.rush_open} accent="red" />
-      </div>
-
-      <div className="grid grid-cols-3 gap-6">
-        {/* MAIN — left 2 cols */}
-        <div className="col-span-2 space-y-6">
-          <Card>
-            <CardHeader title="Pending Orders" subtitle="Drafts and orders waiting on artwork / customer / approval"
-              action={<Link href="/orders" className="text-xs text-navy-700 hover:underline font-semibold">View all →</Link>} />
-            <table className="w-full text-sm">
-              <thead className="text-xs text-gray-500 uppercase tracking-wider">
-                <tr>
-                  <th className="text-left px-5 py-2.5">Order #</th>
-                  <th className="text-left px-5 py-2.5">Customer</th>
-                  <th className="text-left px-5 py-2.5">Status</th>
-                  <th className="text-left px-5 py-2.5">ADT Promised</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pendingOrders.length === 0 && (
-                  <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-400">No pending orders.</td></tr>
-                )}
-                {pendingOrders.map((o) => (
-                  <tr key={o.id} className="border-t border-gray-100 hover:bg-gray-50">
-                    <td className="px-5 py-2.5">
-                      <Link href={`/orders/${o.id}`} className="font-mono text-navy-700 hover:underline">{o.order_number}</Link>
-                    </td>
-                    <td className="px-5 py-2.5">{o.company_name}</td>
-                    <td className="px-5 py-2.5"><StatusPill status={o.status} /></td>
-                    <td className="px-5 py-2.5">{formatDate(o.adt_promised_date)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Card>
-
-          <Card>
-            <CardHeader title="Recent Orders (Your Assignments)" subtitle="Orders where you are Primary CSR"
-              action={<Link href="/orders" className="text-xs text-navy-700 hover:underline font-semibold">Open dashboard →</Link>} />
-            <table className="w-full text-sm">
-              <thead className="text-xs text-gray-500 uppercase tracking-wider">
-                <tr>
-                  <th className="text-left px-5 py-2.5">Order #</th>
-                  <th className="text-left px-5 py-2.5">Customer</th>
-                  <th className="text-left px-5 py-2.5">Status</th>
-                  <th className="text-left px-5 py-2.5">Promised</th>
-                  <th className="text-right px-5 py-2.5">Age</th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentOrders.map((o) => (
-                  <tr key={o.id} className="border-t border-gray-100 hover:bg-gray-50">
-                    <td className="px-5 py-2.5">
-                      <Link href={`/orders/${o.id}`} className="font-mono text-navy-700 hover:underline">{o.order_number}</Link>
-                      {o.is_rush ? <Tag color="red">Rush</Tag> : null}
-                    </td>
-                    <td className="px-5 py-2.5">{o.company_name}</td>
-                    <td className="px-5 py-2.5"><StatusPill status={o.status} /></td>
-                    <td className="px-5 py-2.5">{formatDate(o.adt_promised_date)}</td>
-                    <td className="px-5 py-2.5 text-right text-xs text-gray-500">{relativeTime(o.created_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Card>
+      {/* Key concepts */}
+      <Card>
+        <CardHeader title="Key concepts to know before you click around" />
+        <div className="p-5 grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
+          <Concept term="Roadmap (R1–R8)"
+            definition="The route an order takes through Helm. R1 = standard print & ship. R5 = strike-off → print → finish → cut/sew → ship. Pickable per order; drives the subway map." />
+          <Concept term="PR · Print Request"
+            definition="One scheduled print job. An order line spawns one or more PRs. A PR ends in printed yardage." />
+          <Concept term="PLANT# (PYY-####)"
+            definition="ADT's design ID, auto-generated on design creation (e.g. P26-1042). Year-resetting counter from 1000. Used in artwork file naming and the Design entity." />
+          <Concept term="Strike-Off"
+            definition="A test print sent to the customer for approval. 14-status workflow ending in Approved / Approved-with-Changes / Rejected. Required on R4 / R5 routes." />
+          <Concept term="Roll"
+            definition="A physical roll cut from a PR's printed yardage. Created only at pack-out time. One PR can yield multiple rolls (e.g. a 500-yard PR → 99 + 100 + 101 + 102 + 106 yards across 5 rolls)." />
+          <Concept term="Traveler QR + CUT label"
+            definition="QR printed below each artwork (encodes the lookup key). Cut/Sew scans the QR at the CUT station to print individual product labels with the right Insert Requirement." />
+          <Concept term="PFP fabric"
+            definition="Prepared For Print fabric. Dye Sub + Latex print on PFP directly; Fiber Reactive + Pigment need pretreatment chemistry first." />
+          <Concept term="Promised vs Estimated date"
+            definition="ADT only commits to a customer-facing 'promised' date once an order is internally approved. Before that, only an internal 'estimated' date exists. Late-flagging always uses Promised, never Estimated." />
         </div>
+      </Card>
 
-        {/* SIDEBAR — right col */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader title="CSV/XML Import Failures"
-              subtitle={`${validationFailures.length} rows need your review`} />
-            <div className="px-5 py-3 space-y-2">
-              {validationFailures.length === 0 && <div className="text-xs text-gray-400 py-2">No failures.</div>}
-              {validationFailures.map((o) => (
-                <div key={o.id} className="text-xs flex items-center gap-2">
-                  <Tag color="yellow">{o.source_system.replace('csv_import_', '').replace('xml_import_', '').replace(/_/g, ' ')}</Tag>
-                  <Link href={`/orders/${o.id}`} className="font-mono text-navy-700 hover:underline">{o.order_number}</Link>
-                  <span className="text-gray-500 truncate">{o.company_name}</span>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          <Card>
-            <CardHeader title="Customer Approval > 7 days" subtitle="Per S23-S32.14 stall surfacing" />
-            <div className="px-5 py-3 space-y-2">
-              {approvalPending.length === 0 && <div className="text-xs text-gray-400 py-2">No stalled approvals.</div>}
-              {approvalPending.map((s, idx) => (
-                <div key={idx} className="text-xs flex items-center justify-between">
-                  <span>
-                    <span className="font-mono">{s.strike_off_number}</span>
-                    <span className="text-gray-500 ml-2">{s.company_name}</span>
-                  </span>
-                  <Tag color="yellow">{Math.floor(s.days_waiting || 0)}d</Tag>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          <Card>
-            <CardHeader title="Credit Hold" />
-            <div className="px-5 py-3 space-y-1.5">
-              {creditHold.length === 0 && <div className="text-xs text-gray-400 py-2">No customers on credit hold.</div>}
-              {creditHold.map((c) => (
-                <div key={c.id} className="text-xs flex items-center justify-between">
-                  <span>{c.name}</span>
-                  <Tag color="red">Hold</Tag>
-                </div>
-              ))}
-            </div>
-          </Card>
-
-          <Card>
-            <CardHeader title="Quick Actions" />
-            <div className="px-5 py-3 space-y-1.5 text-sm">
-              <Link href="/orders/new" className="block px-3 py-2 bg-navy-700 text-white rounded text-center font-semibold hover:bg-navy-900">
-                + New Order
-              </Link>
-              <Link href="/orders" className="block px-3 py-2 border border-gray-300 rounded text-center hover:bg-gray-50">
-                View Order Dashboard
-              </Link>
-              <Link href="/customers" className="block px-3 py-2 border border-gray-300 rounded text-center hover:bg-gray-50">
-                Browse Customers
-              </Link>
-            </div>
-          </Card>
+      {/* Guided tour */}
+      <div>
+        <h2 className="text-xl font-bold text-navy-900 mb-1">Guided tour — start here</h2>
+        <p className="text-sm text-gray-600 mb-4">Curated entry points for the screens that best demonstrate what Helm does. Each link is a real page in the prototype.</p>
+        <div className="grid grid-cols-3 gap-4">
+          <TourCard icon={<Map className="w-5 h-5" />} href="/orders"
+            title="Order Subway Map (S21)"
+            description="Open any order to see per-PR visual subway maps plotting each PR along its roadmap route. The brand-vision screen." />
+          <TourCard icon={<Stamp className="w-5 h-5" />} href="/strike-offs"
+            title="Strike-Off Workflow (S25/S26/S26a)"
+            description="14-status list → detail page with public approval link → click 'Open' to see the customer-facing approval page." />
+          <TourCard icon={<FileText className="w-5 h-5" />} href="/intake"
+            title="Intake Command Center (S42b)"
+            description="The automated CSV/XML print intake — pipeline state, strike-off engine, composite engine, scan events." />
+          <TourCard icon={<ScanLine className="w-5 h-5" />} href="/cut-station"
+            title="CUT Station · Scan & Label"
+            description="Scan a Traveler QR (try ADT-4506) → look up the order's line items → print individual CUT labels with the resolved Insert Requirement." />
+          <TourCard icon={<GitBranch className="w-5 h-5" />} href="/roadmaps"
+            title="Roadmap Builder (S22)"
+            description="All 7 routes (R1, R2, R4, R5, R6, R7, R8) with live in-flight order counts and the rule that picks each route." />
+          <TourCard icon={<Calendar className="w-5 h-5" />} href="/production-scheduling"
+            title="Production Scheduling (S28)"
+            description="7-day capacity calendar across the print fleet. Color coded by utilization, overbooked machines flagged." />
+          <TourCard icon={<Brush className="w-5 h-5" />} href="/designs/import"
+            title="Bulk Import Designs"
+            description="CSV upload for designs + colorways + artwork file paths. Demonstrates validation + preview-then-commit pattern." />
+          <TourCard icon={<BarChart3 className="w-5 h-5" />} href="/dashboards/daily-production"
+            title="Daily Production Dashboard"
+            description="Today's printer load + PR list with late tracking. Pair with Strike-Off / CSR / Quality dashboards for the manager surface." />
+          <TourCard icon={<Server className="w-5 h-5" />} href="/it-admin"
+            title="IT / System Admin (S14)"
+            description="9 monitored integrations (QuickBooks, Shopify, HubSpot, PandaDoc, EasyPost, UPS/FedEx, NAS, RIP, DASH), sync queue, audit log." />
         </div>
       </div>
+
+      {/* Persona view */}
+      <Card>
+        <CardHeader title="Or — view the prototype as a specific person" subtitle="Each role has its own home page tailored to their day." />
+        <div className="p-5 grid grid-cols-4 gap-3 text-sm">
+          <PersonaLink href="/megan"          name="Megan Burleson"   role="Production Manager" />
+          <PersonaLink href="/csr-home"       name="Sarah Castillo"   role="CSR" />
+          <PersonaLink href="/colorist"       name="Jeannine Romero"  role="Colorist" />
+          <PersonaLink href="/print-op-home"  name="Julio Vargas"     role="Print Operator" />
+          <PersonaLink href="/finishing-home" name="Lucio Hernandez"  role="Finishing" />
+          <PersonaLink href="/cut-sew-home"   name="Yuliana Cruz"     role="Cut/Sew" />
+          <PersonaLink href="/inventory-home" name="Karen Boyd"       role="Inventory" />
+          <PersonaLink href="/shipping-home"  name="Marcus Hill"      role="Shipping" />
+          <PersonaLink href="/receiving-home" name="Tomás Rivera"     role="Receiving" />
+          <PersonaLink href="/accounting-home" name="Diana Park"      role="Accounting" />
+        </div>
+        <div className="px-5 pb-4 text-xs text-gray-500 italic">
+          Tip: the persona switcher in the top-right of the topbar deep-links you straight to a chosen role&apos;s home.
+        </div>
+      </Card>
+
+      {/* What's mock disclaimer */}
+      <Card className="border-yellow-200 bg-yellow-50/30">
+        <CardHeader title="What's real vs. mock in this prototype" />
+        <div className="p-5 text-sm text-gray-700 space-y-2">
+          <p><strong>DB-backed (live from seed):</strong> Orders, Order Lines, Print Requests, PR Rolls, Strike-Offs, FPRs, Customers, Designs, Colorways, Fabrics, Printers, Inventory items, Master SKUs, Artwork Files, Notifications. Every dashboard, role home, and detail page reading these tables shows real, consistent data.</p>
+          <p><strong>Inline mock (no schema yet):</strong> Exceptions (Exception Center + CSR home count), Returns / RMAs, Receiving inbound shipments, IT Admin integration health, Intake Command Center pipeline events, PO Intake queue, accounting QB sync queue. These pages exist to demonstrate the UX shape; production needs new tables.</p>
+          <p><strong>Mixed:</strong> Some pages compose live data with mock metadata — e.g. Production Scheduling reads scheduled PRs from the DB but the per-printer daily capacity is a constant in the page.</p>
+          <p>Every page has a thin annotation strip at the bottom showing its blueprint S## reference, Wave tag, data source, and a link to the source code on GitHub.</p>
+        </div>
+      </Card>
+
+      {/* Footer / context */}
+      <Card>
+        <CardHeader title="About this prototype" />
+        <div className="p-5 text-sm text-gray-700 space-y-2">
+          <p>Built as a Next.js 14 App Router app with SQLite (better-sqlite3) seeded fresh on each deploy. Hosted on Vercel. Repo: <code className="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded">nickdv6/adt-helm-prototype</code>.</p>
+          <p>Purpose: shared reference for ADT leadership, Sight Source (build partner), and department leads. Replaces verbal description with something everyone can click through and react to.</p>
+          <p>Status: ~55 pages live, covering Wave 1 and most of Wave 2. The blueprint screen list calls for 77 total; see <Link href="/sitemap" className="text-navy-700 hover:underline font-semibold">/sitemap</Link> for what&apos;s built.</p>
+        </div>
+      </Card>
     </div>
   );
 }
 
-function StatCard({ label, value, accent }: { label: string; value: number; accent: 'yellow' | 'blue' | 'green' | 'red' }) {
-  const accentCls = {
-    yellow: 'bg-helm-yellow',
-    blue: 'bg-helm-blue',
-    green: 'bg-helm-green',
-    red: 'bg-helm-red',
-  }[accent];
+function Concept({ term, definition }: { term: string; definition: string }) {
   return (
-    <Card>
-      <div className="p-5 flex items-center gap-4">
-        <div className={`w-1 h-12 rounded ${accentCls}`} />
-        <div>
-          <div className="text-3xl font-bold text-navy-900">{value}</div>
-          <div className="text-xs text-gray-500 uppercase tracking-wider mt-1">{label}</div>
-        </div>
+    <div>
+      <div className="font-semibold text-navy-700">{term}</div>
+      <div className="text-gray-600 text-[13px] mt-0.5">{definition}</div>
+    </div>
+  );
+}
+
+function TourCard({ icon, href, title, description }: { icon: React.ReactNode; href: string; title: string; description: string }) {
+  return (
+    <Link href={href} className="block border border-gray-200 rounded-lg p-4 hover:border-navy-700/40 hover:bg-navy-50/30 transition-colors group">
+      <div className="flex items-center gap-2 mb-1.5">
+        <span className="text-navy-700">{icon}</span>
+        <div className="font-semibold text-navy-900 text-sm">{title}</div>
       </div>
-    </Card>
+      <div className="text-xs text-gray-600 leading-relaxed">{description}</div>
+      <div className="text-xs text-navy-700 mt-2 inline-flex items-center gap-1 group-hover:gap-2 transition-all">
+        Open <ArrowRight className="w-3 h-3" />
+      </div>
+    </Link>
+  );
+}
+
+function PersonaLink({ href, name, role }: { href: string; name: string; role: string }) {
+  const initials = name.split(' ').map((p) => p[0]).join('').slice(0, 2);
+  return (
+    <Link href={href} className="flex items-center gap-2 border border-gray-200 rounded p-2 hover:bg-gray-50 hover:border-navy-700/30">
+      <div className="w-8 h-8 rounded-full bg-navy-700 text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">{initials}</div>
+      <div className="min-w-0">
+        <div className="font-semibold text-navy-900 text-xs truncate">{name}</div>
+        <div className="text-[10px] text-gray-500 truncate">{role}</div>
+      </div>
+    </Link>
   );
 }

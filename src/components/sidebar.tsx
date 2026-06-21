@@ -11,7 +11,9 @@ export function Sidebar() {
 
       <nav className="flex-1 py-4 space-y-0.5 text-sm">
         <Section label="Daily" />
-        <NavItem href="/" icon={<Home className="w-4 h-4" />} label="My Home" />
+        <NavItem href="/" icon={<Home className="w-4 h-4" />} label="Tour · Landing" />
+        <NavItem href="/sitemap" icon={<Layers className="w-4 h-4" />} label="Sitemap" />
+        <NavItem href="/changelog" icon={<FileText className="w-4 h-4" />} label="Changelog" />
         <NavItem href="/inbox" icon={<Inbox className="w-4 h-4" />} label="Inbox" badge="8" />
 
         <Section label="Role Homes" />
