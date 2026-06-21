@@ -1,12 +1,16 @@
 // /receiving-home/receive — Receive Fabric intake form
-// Captures a single inbound fabric delivery at the dock. Routes the receipt to
-// Studio (for white-point measurement) or Finishing (for pretreatment / absorbency
-// check) based on Tomás's call. Sample cut is a required step before any routing.
+// Captures a single inbound fabric delivery at the dock. Sample cut is required; the
+// resulting swatch goes through two tests (department TBD): white-point measurement
+// in CIE L*a*b* color space and an absorbency pass/fail.
+//
+// Tests can be entered at receipt time OR left blank for follow-up. The record's
+// status is 'Awaiting Test' until both are filled in.
 //
 // Production schema additions needed: a material_receipts table with
 //   id, owner_type (customer|adt), owner_company_id, supplier_mill_name, yardage,
-//   roll_count, condition_notes, sample_cut_taken, sample_routed_to (studio|finishing),
-//   po_reference, received_at, received_by_user_id, status
+//   roll_count, condition_notes, sample_cut_taken, po_reference,
+//   white_point_L, white_point_a, white_point_b, absorbency (pass|fail|null),
+//   tested_at, tested_by_user_id, received_at, received_by_user_id, status
 import { getDb } from '@/lib/db';
 import { ReceiveForm } from './receive-form';
 
