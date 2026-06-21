@@ -63,125 +63,128 @@ export default function PRDetail({ params }: { params: { id: string } }) {
         </div>
       </header>
 
-      {/* Internal Proof Card — only show if proof is required */}
-      {pr.internal_proof_status !== 'not_required' && (
-        <Card>
-          <CardHeader title="Internal Pre-Production Proof (S23-S32.60)" subtitle="First piece off the printer — Jeannine reviews before full production released" />
-          <div className="px-5 py-4 grid grid-cols-3 gap-4 text-sm">
-            <Field label="Status">
-              <StatusPill status={pr.internal_proof_status === 'approved' ? 'Approved'
-                : pr.internal_proof_status === 'pending' ? 'Pending Internal Proof'
-                : pr.internal_proof_status === 'failed' ? 'Issue — Contact Us' : 'Not Required'} />
-            </Field>
-            <Field label="Requested">{pr.internal_proof_requested_at ? relativeTime(pr.internal_proof_requested_at) : '—'}</Field>
-            <Field label="Resolved">{pr.internal_proof_resolved_at ? relativeTime(pr.internal_proof_resolved_at) : '—'}</Field>
-            <Field label="Resolved By">{pr.internal_proof_resolved_by_user_id ? 'Jeannine Romero' : '—'}</Field>
-            <Field label="Auto-Prep Done">{pr.auto_prep_completed_at ? relativeTime(pr.auto_prep_completed_at) : '—'}</Field>
-            <Field label="Fail Reason">{pr.internal_proof_fail_reason || '—'}</Field>
-          </div>
-          {pr.internal_proof_status === 'pending' && (
-            <div className="px-5 pb-4 flex gap-2 border-t border-gray-100 pt-3">
-              <Button variant="secondary">Approve Proof — Release for Production</Button>
-              <Button variant="danger">Fail Proof — Hold + Notify</Button>
-            </div>
+      {/* 50/50 layout — left: all context cards stacked, right: Artwork Preview pinned to top */}
+      <div className="grid grid-cols-2 gap-6 items-start">
+        <div className="space-y-6">
+          {/* Internal Proof Card — only show if proof is required */}
+          {pr.internal_proof_status !== 'not_required' && (
+            <Card>
+              <CardHeader title="Internal Pre-Production Proof (S23-S32.60)" subtitle="First piece off the printer — Jeannine reviews before full production released" />
+              <div className="px-5 py-4 grid grid-cols-2 gap-4 text-sm">
+                <Field label="Status">
+                  <StatusPill status={pr.internal_proof_status === 'approved' ? 'Approved'
+                    : pr.internal_proof_status === 'pending' ? 'Pending Internal Proof'
+                    : pr.internal_proof_status === 'failed' ? 'Issue — Contact Us' : 'Not Required'} />
+                </Field>
+                <Field label="Requested">{pr.internal_proof_requested_at ? relativeTime(pr.internal_proof_requested_at) : '—'}</Field>
+                <Field label="Resolved">{pr.internal_proof_resolved_at ? relativeTime(pr.internal_proof_resolved_at) : '—'}</Field>
+                <Field label="Resolved By">{pr.internal_proof_resolved_by_user_id ? 'Jeannine Romero' : '—'}</Field>
+                <Field label="Auto-Prep Done">{pr.auto_prep_completed_at ? relativeTime(pr.auto_prep_completed_at) : '—'}</Field>
+                <Field label="Fail Reason">{pr.internal_proof_fail_reason || '—'}</Field>
+              </div>
+              {pr.internal_proof_status === 'pending' && (
+                <div className="px-5 pb-4 flex gap-2 border-t border-gray-100 pt-3">
+                  <Button size="sm" variant="secondary">Approve Proof — Release</Button>
+                  <Button size="sm" variant="danger">Fail Proof — Hold</Button>
+                </div>
+              )}
+            </Card>
           )}
-        </Card>
-      )}
 
-      {/* Auto-route card */}
-      {pr.was_csv_auto_routed && (
-        <Card>
-          <CardHeader title="CSV/XML Auto-Route (S23-S32.61)" />
-          <div className="px-5 py-3 text-sm">
-            Auto-routed to hot folder <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">{pr.hot_folder_target}</span>
-            <span className="text-gray-500 ml-3">Internal proof skipped per Wave 1 logic.</span>
-          </div>
-        </Card>
-      )}
+          {/* Auto-route card */}
+          {pr.was_csv_auto_routed && (
+            <Card>
+              <CardHeader title="CSV/XML Auto-Route (S23-S32.61)" />
+              <div className="px-5 py-3 text-sm">
+                Auto-routed to hot folder <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded break-all">{pr.hot_folder_target}</span>
+                <div className="text-gray-500 mt-1 text-xs">Internal proof skipped per Wave 1 logic.</div>
+              </div>
+            </Card>
+          )}
 
-      {/* Traveler QR + Composite status card */}
-      {pr.traveler_composite_status && pr.traveler_composite_status !== 'not_required' && (
-        <Card className={pr.traveler_composite_status === 'failed' ? 'border-red-300' : ''}>
-          <CardHeader
-            title="Traveler QR · Composite"
-            subtitle="QR printed below the artwork · payload = lookup key · Compositing Engine generates composite file before XML routes to hot folder"
-            action={
-              pr.traveler_composite_status === 'failed'
-                ? <Button size="sm" variant="ghost"><RotateCcw className="w-3.5 h-3.5 mr-1" />Retry composite</Button>
-                : null
-            }
-          />
-          <div className="px-5 py-3 grid grid-cols-3 gap-4 text-sm">
-            <Field label="Traveler QR payload">
-              {pr.traveler_qr_payload
-                ? <span className="font-mono text-navy-700 font-semibold">{pr.traveler_qr_payload}</span>
-                : <span className="text-gray-400 italic">not assigned yet</span>}
-            </Field>
-            <Field label="Composite status">
-              {pr.traveler_composite_status === 'generated' && <span className="inline-flex items-center gap-1 text-green-700"><CheckCircle2 className="w-3.5 h-3.5" />Generated</span>}
-              {pr.traveler_composite_status === 'pending' && <span className="inline-flex items-center gap-1 text-blue-700"><ScanLine className="w-3.5 h-3.5" />Pending</span>}
-              {pr.traveler_composite_status === 'failed' && <span className="inline-flex items-center gap-1 text-red-700"><AlertTriangle className="w-3.5 h-3.5" />Failed</span>}
-            </Field>
-            <Field label="Generated">
-              {pr.composite_generated_at ? relativeTime(pr.composite_generated_at) : <span className="text-gray-400">—</span>}
-            </Field>
-            <Field label="Composite file path" full>
-              {pr.traveler_composite_file_path
-                ? <span className="font-mono text-xs text-gray-600 break-all">{pr.traveler_composite_file_path}</span>
-                : <span className="text-gray-400 italic">—</span>}
-            </Field>
-            {pr.composite_error && (
-              <Field label="Error" full>
-                <span className="text-red-700 text-xs italic">{pr.composite_error}</span>
+          {/* Traveler QR + Composite status card */}
+          {pr.traveler_composite_status && pr.traveler_composite_status !== 'not_required' && (
+            <Card className={pr.traveler_composite_status === 'failed' ? 'border-red-300' : ''}>
+              <CardHeader
+                title="Traveler QR · Composite"
+                subtitle="QR payload = lookup key · composite file generated before XML hits hot folder"
+                action={
+                  pr.traveler_composite_status === 'failed'
+                    ? <Button size="sm" variant="ghost"><RotateCcw className="w-3.5 h-3.5 mr-1" />Retry</Button>
+                    : null
+                }
+              />
+              <div className="px-5 py-3 grid grid-cols-2 gap-4 text-sm">
+                <Field label="Traveler QR payload">
+                  {pr.traveler_qr_payload
+                    ? <span className="font-mono text-navy-700 font-semibold">{pr.traveler_qr_payload}</span>
+                    : <span className="text-gray-400 italic">not assigned yet</span>}
+                </Field>
+                <Field label="Composite status">
+                  {pr.traveler_composite_status === 'generated' && <span className="inline-flex items-center gap-1 text-green-700"><CheckCircle2 className="w-3.5 h-3.5" />Generated</span>}
+                  {pr.traveler_composite_status === 'pending' && <span className="inline-flex items-center gap-1 text-blue-700"><ScanLine className="w-3.5 h-3.5" />Pending</span>}
+                  {pr.traveler_composite_status === 'failed' && <span className="inline-flex items-center gap-1 text-red-700"><AlertTriangle className="w-3.5 h-3.5" />Failed</span>}
+                </Field>
+                <Field label="Generated">
+                  {pr.composite_generated_at ? relativeTime(pr.composite_generated_at) : <span className="text-gray-400">—</span>}
+                </Field>
+                <Field label="File path">
+                  {pr.traveler_composite_file_path
+                    ? <span className="font-mono text-[10px] text-gray-600 break-all">{pr.traveler_composite_file_path}</span>
+                    : <span className="text-gray-400 italic">—</span>}
+                </Field>
+                {pr.composite_error && (
+                  <div className="col-span-2">
+                    <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-0.5">Error</div>
+                    <span className="text-red-700 text-xs italic">{pr.composite_error}</span>
+                  </div>
+                )}
+              </div>
+            </Card>
+          )}
+
+          {/* CUT Station context card — VPN + insert requirement (used at the CUT station scan flow) */}
+          <Card>
+            <CardHeader
+              title="CUT Station Context · VPN + Insert"
+              subtitle="Master SKU mapping → Insert Requirement on each CUT label"
+              action={
+                <Link href="/cut-station">
+                  <Button size="sm" variant="secondary"><ScanLine className="w-3.5 h-3.5 mr-1" />CUT Station →</Button>
+                </Link>
+              }
+            />
+            <div className="px-5 py-3 grid grid-cols-2 gap-4 text-sm">
+              <Field label="VPN">
+                {pr.vpn
+                  ? <span className="font-mono">{pr.vpn}</span>
+                  : <span className="text-gray-400 italic">no VPN on this line</span>}
               </Field>
-            )}
-          </div>
-        </Card>
-      )}
+              <Field label="Product Type (master)">
+                {pr.product_type_from_master
+                  ? <span className="font-mono text-xs">{pr.product_type_from_master}</span>
+                  : <span className="text-gray-400">—</span>}
+              </Field>
+              <Field label="Insert Requirement">
+                {(() => {
+                  const display = insertDisplay(pr.product_type_from_master, pr.insert_required);
+                  const isNoInsert = display === 'NO INSERT';
+                  return (
+                    <span className={`font-mono ${isNoInsert ? 'text-gray-600 uppercase tracking-wider font-semibold' : 'text-navy-700 font-semibold'}`}>
+                      {display}
+                    </span>
+                  );
+                })()}
+              </Field>
+              <Field label="Master SKU mapping">
+                {pr.master_sku_mapping_status === 'mapped' && <Tag color="green">Mapped</Tag>}
+                {pr.master_sku_mapping_status === 'unmapped' && <Tag color="red">Unknown VPN</Tag>}
+                {pr.master_sku_mapping_status === 'no_vpn' && <Tag color="gray">No VPN</Tag>}
+              </Field>
+            </div>
+          </Card>
 
-      {/* CUT Station context card — VPN + insert requirement (used at the CUT station scan flow) */}
-      <Card>
-        <CardHeader
-          title="CUT Station Context · VPN + Insert Requirement"
-          subtitle="Master SKU mapping drives the Insert Requirement printed on each CUT label · Unknown VPN raises an exception"
-          action={
-            <Link href="/cut-station">
-              <Button size="sm" variant="secondary"><ScanLine className="w-3.5 h-3.5 mr-1" />Open CUT Station →</Button>
-            </Link>
-          }
-        />
-        <div className="px-5 py-3 grid grid-cols-4 gap-4 text-sm">
-          <Field label="VPN">
-            {pr.vpn
-              ? <span className="font-mono">{pr.vpn}</span>
-              : <span className="text-gray-400 italic">no VPN on this line</span>}
-          </Field>
-          <Field label="Product Type (master)">
-            {pr.product_type_from_master
-              ? <span className="font-mono text-xs">{pr.product_type_from_master}</span>
-              : <span className="text-gray-400">—</span>}
-          </Field>
-          <Field label="Insert Requirement">
-            {(() => {
-              const display = insertDisplay(pr.product_type_from_master, pr.insert_required);
-              const isNoInsert = display === 'NO INSERT';
-              return (
-                <span className={`font-mono ${isNoInsert ? 'text-gray-600 uppercase tracking-wider font-semibold' : 'text-navy-700 font-semibold'}`}>
-                  {display}
-                </span>
-              );
-            })()}
-          </Field>
-          <Field label="Master SKU mapping">
-            {pr.master_sku_mapping_status === 'mapped' && <Tag color="green">Mapped</Tag>}
-            {pr.master_sku_mapping_status === 'unmapped' && <Tag color="red">Unknown VPN</Tag>}
-            {pr.master_sku_mapping_status === 'no_vpn' && <Tag color="gray">No VPN</Tag>}
-          </Field>
-        </div>
-      </Card>
-
-      <div className="grid grid-cols-3 gap-6">
-        <div className="col-span-2 space-y-6">
+          {/* PR Details */}
           <Card>
             <CardHeader title="PR Details" />
             <div className="px-5 py-4 grid grid-cols-2 gap-y-3 gap-x-6 text-sm">
@@ -215,12 +218,13 @@ export default function PRDetail({ params }: { params: { id: string } }) {
           )}
         </div>
 
+        {/* Right column — Artwork Preview at top, then Parent Order, then Actions */}
         <div className="space-y-6">
           <ArtworkPreview pr={pr} />
           <Card>
             <CardHeader title="Parent Order" />
             <div className="px-5 py-4 text-sm space-y-2">
-              <div>
+              <div className="flex items-center gap-2">
                 <Link href={`/orders/${pr.order_id}`} className="font-mono font-semibold text-navy-700 hover:underline">{pr.order_number}</Link>
                 <StatusPill status={pr.order_status} />
               </div>
@@ -231,10 +235,10 @@ export default function PRDetail({ params }: { params: { id: string } }) {
           <Card>
             <CardHeader title="Actions" />
             <div className="px-5 py-3 space-y-2">
-              <Button variant="secondary">Reprint (creates child PR)</Button>
-              <Button variant="ghost">Recall RIP (OD-6)</Button>
-              <Button variant="ghost">Edit Profile</Button>
-              <Button variant="ghost">Open in Printer Queue</Button>
+              <Button variant="secondary" className="w-full justify-start">Reprint (creates child PR)</Button>
+              <Button variant="ghost" className="w-full justify-start">Recall RIP (OD-6)</Button>
+              <Button variant="ghost" className="w-full justify-start">Edit Profile</Button>
+              <Button variant="ghost" className="w-full justify-start">Open in Printer Queue</Button>
             </div>
           </Card>
         </div>
