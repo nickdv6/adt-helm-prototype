@@ -36,6 +36,7 @@ export function Sidebar() {
         <NavItem href="/production-scheduling" icon={<Calendar className="w-4 h-4" />} label="Production Scheduling" />
         <NavItem href="/strike-offs" icon={<Stamp className="w-4 h-4" />} label="Strike-Offs" />
         <NavItem href="/artwork" icon={<FileImage className="w-4 h-4" />} label="Artwork Files" />
+        <NavItem href="/fabrics" icon={<Layers className="w-4 h-4" />} label="Fabrics" />
         <NavItem href="/printer-queue" icon={<Printer className="w-4 h-4" />} label="Printer Queue" />
         <NavItem href="/batch-ticket" icon={<Flame className="w-4 h-4" />} label="Batch Ticket · Heat Press" />
         <NavItem href="/cut-sew" icon={<Scissors className="w-4 h-4" />} label="Cut/Sew Queue" />

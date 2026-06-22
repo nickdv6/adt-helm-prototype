@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Copy, Trash2, Plus, Save } from 'lucide-react';
 import { Button } from '@/components/ui';
 
@@ -260,10 +261,10 @@ function PrintRequestPanel({ onCopy, onDelete }: { onCopy: () => void; onDelete:
         <Field label="Color Match" required><Select options={COLOR_MATCH} /></Field>
         <Field label="GHL #"><Text /></Field>
 
-        <Field label="Fabric" required trailing={<AddBtn />}>
+        <Field label="Fabric" required trailing={<AddBtn href="/fabrics/new" title="Add new fabric" />}>
           <Select options={FABRICS} />
         </Field>
-        <Field label="Design/Colorway" required trailing={<AddBtn />}>
+        <Field label="Design/Colorway" required trailing={<AddBtn href="/designs/new" title="Add new design" />}>
           <Select options={DESIGNS} />
         </Field>
         <Field label="Quantity" required><Text /></Field>
@@ -409,13 +410,17 @@ function ReadOnlyValue({ value }: { value: string }) {
   );
 }
 
-function AddBtn() {
+function AddBtn({ href, title = 'Add new (inline)' }: { href?: string; title?: string }) {
+  const cls = "px-2 py-1 rounded bg-green-500 text-white text-xs hover:bg-green-600 flex items-center";
+  if (href) {
+    return (
+      <Link href={href} title={title} className={cls} target="_blank" rel="noreferrer">
+        <Plus className="w-3.5 h-3.5" />
+      </Link>
+    );
+  }
   return (
-    <button
-      type="button"
-      title="Add new (inline)"
-      className="px-2 py-1 rounded bg-green-500 text-white text-xs hover:bg-green-600 flex items-center"
-    >
+    <button type="button" title={title} className={cls}>
       <Plus className="w-3.5 h-3.5" />
     </button>
   );
