@@ -65,7 +65,9 @@ export default function FabricsPage({ searchParams }: { searchParams: { q?: stri
             <tbody>
               {fabrics.map((f) => (
                 <tr key={f.id} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-2.5 font-semibold text-navy-900">{f.name}</td>
+                  <td className="px-4 py-2.5">
+                    <Link href={`/fabrics/${f.id}`} className="font-semibold text-navy-700 hover:underline">{f.name}</Link>
+                  </td>
                   <td className="px-4 py-2.5 text-xs">{f.fiber_content ?? <span className="text-gray-300">—</span>}</td>
                   <td className="px-4 py-2.5 font-mono text-xs">{f.width_inches ? `${f.width_inches}"` : <span className="text-gray-300">—</span>}</td>
                   <td className="px-4 py-2.5 text-xs">{f.weight ?? <span className="text-gray-300">—</span>}</td>

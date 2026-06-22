@@ -1,8 +1,7 @@
 'use client';
-// Tech Sheet PDF preview modal. Renders a printable page-style layout that
-// previews what the standardized customer-facing tech sheet would look like.
-// Sized to letter (8.5"×11") portrait. Click Print or Download in production
-// would generate an actual PDF; here it just shows the rendered preview.
+// Tech Sheet PDF preview modal — branded letter-aspect layout suitable for
+// emailing or downloading. Reused by both /fabrics/new (preview before save)
+// and /fabrics/[id] (download for existing fabric).
 import { useEffect } from 'react';
 import { X, Printer, Download } from 'lucide-react';
 
@@ -23,6 +22,7 @@ export type FabricSnapshot = {
   content3: string; pct3: string;
   wyzenbeek: string;
   martindale: string;
+  performanceRating: string;   // e.g. "Heavy Duty"
   weightOz: string;
   weightGsm: string;
   nfpa701: boolean;
@@ -31,7 +31,7 @@ export type FabricSnapshot = {
   salePrice: string;
 };
 
-export function TechSheetPreview({ fabric, onClose }: { fabric: FabricSnapshot; onClose: () => void }) {
+export function FabricTechSheet({ fabric, onClose }: { fabric: FabricSnapshot; onClose: () => void }) {
   // Close on Escape
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -51,12 +51,18 @@ export function TechSheetPreview({ fabric, onClose }: { fabric: FabricSnapshot; 
     fabric.ca117 ? 'CA 117' : '',
   ].filter(Boolean).join(' · ') || '—';
 
+  const abrasionLine = [
+    fabric.wyzenbeek ? `${Number(fabric.wyzenbeek).toLocaleString()} double rubs (Wyzenbeek)` : '',
+    fabric.martindale ? `${Number(fabric.martindale).toLocaleString()} cycles (Martindale)` : '',
+  ].filter(Boolean).join(' · ') || '—';
+
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 overflow-y-auto"
+      onClick={onClose}>
       <div className="bg-gray-100 rounded-lg shadow-2xl max-w-4xl w-full my-8" onClick={(e) => e.stopPropagation()}>
         {/* Toolbar */}
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-300 bg-white rounded-t-lg">
-          <div className="text-sm font-semibold text-navy-900">Tech Sheet Preview · PDF</div>
+          <div className="text-sm font-semibold text-navy-900">Tech Sheet · PDF Preview</div>
           <div className="flex gap-2">
             <button className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-navy-700 hover:bg-navy-900 rounded">
               <Printer className="w-3.5 h-3.5" />Print
@@ -97,8 +103,8 @@ export function TechSheetPreview({ fabric, onClose }: { fabric: FabricSnapshot; 
                   fabric.weightGsm ? `${fabric.weightGsm} g/m²` : null,
                 ].filter(Boolean).join(' · ') || '—'} />
                 <Section title="Per Thousand Weight" value={fabric.perThouWeight ? `${fabric.perThouWeight} lbs / 1000 yd` : '—'} />
-                <Section title="Wyzenbeek" value={fabric.wyzenbeek ? `${Number(fabric.wyzenbeek).toLocaleString()} double rubs` : '—'} />
-                <Section title="Martindale" value={fabric.martindale ? `${Number(fabric.martindale).toLocaleString()} cycles` : '—'} />
+                <Section title="Abrasion" value={abrasionLine} />
+                <Section title="Performance Rating" value={fabric.performanceRating || '—'} />
                 <Section title="Country of Origin" value={fabric.country || '—'} />
                 <Section title="Supplier" value={fabric.supplier || '—'} />
                 <Section title="HTS — Raw (as imported)" value={fabric.htsRaw || '—'} />

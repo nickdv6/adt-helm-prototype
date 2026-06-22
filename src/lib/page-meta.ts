@@ -94,6 +94,8 @@ export const PAGES: PageMeta[] = [
     category: 'Production', blueprintId: 'S27', wave: 'Wave 1', dataSource: 'live', sourcePath: 'app/artwork/page.tsx' },
   { path: '/fabrics',       title: 'Fabrics',                     summary: 'Master fabric registry with PR + SKU usage counts.',
     category: 'Production', wave: 'Wave 1', dataSource: 'live', sourcePath: 'app/fabrics/page.tsx' },
+  { path: '/fabrics/[id]',  title: 'Fabric Detail',               summary: 'Full spec sheet view with usage history + branded Tech Sheet PDF preview/download/email.',
+    category: 'Production', wave: 'Wave 1', dataSource: 'mixed', dataNote: 'Name/width/fiber live; HTS, NFPA, abrasion ratings derived per-fabric for the prototype.', sourcePath: 'app/fabrics/[id]/page.tsx' },
   { path: '/fabrics/new',   title: 'Create Fabric',               summary: 'Full DASH-style spec form: composition, performance, compliance, pricing. Tech Sheet PDF preview.',
     category: 'Production', wave: 'Wave 1', dataSource: 'mock', dataNote: 'Form submits in-memory; production needs fabric_specs sub-table.', sourcePath: 'app/fabrics/new/page.tsx' },
   { path: '/production-scheduling', title: 'Production Scheduling', summary: '7-day capacity calendar per printer with overbooked detection.',

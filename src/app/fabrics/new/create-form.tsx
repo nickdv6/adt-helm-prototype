@@ -3,7 +3,18 @@ import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { Card, CardHeader, Tag, Button } from '@/components/ui';
 import { FileText } from 'lucide-react';
-import { TechSheetPreview } from './tech-sheet-preview';
+import { FabricTechSheet } from '@/components/fabric-tech-sheet';
+
+// Performance Rating maps abrasion test result → human-readable usability tier.
+// Customers tend to ask "what's it good for?" — these labels answer it whether
+// the lab ran Wyzenbeek or Martindale (or neither, if rated by inspection).
+const PERFORMANCE_RATINGS = [
+  'Decorative / Light Duty',     // < 9k Wyzenbeek or < 10k Martindale
+  'Medium Duty / Residential',   // 9-15k Wyzenbeek or 10-20k Martindale
+  'Heavy Duty / Residential',    // 15-30k Wyzenbeek or 20-40k Martindale
+  'Heavy Duty Plus',             // 30-50k Wyzenbeek or 40-60k Martindale
+  'Commercial / Contract',       // 50k+ Wyzenbeek or 60k+ Martindale
+];
 
 type OwnerType = 'company' | 'adt';
 
@@ -41,6 +52,7 @@ export function CreateFabricForm({ customers }: { customers: { id: number; name:
   // Performance
   const [wyzenbeek, setWyzenbeek] = useState('');
   const [martindale, setMartindale] = useState('');
+  const [performanceRating, setPerformanceRating] = useState('');
   const [weightOz, setWeightOz] = useState('');
   const [weightGsm, setWeightGsm] = useState('');
   const [editingGsm, setEditingGsm] = useState(false);
@@ -113,7 +125,8 @@ export function CreateFabricForm({ customers }: { customers: { id: number; name:
     setWidth(''); setPrintWidth(''); setCountry(''); setPerThouWeight('');
     setHtsRaw(''); setHtsPrinted('');
     setContent1(''); setPct1(''); setContent2(''); setPct2(''); setContent3(''); setPct3('');
-    setWyzenbeek(''); setMartindale(''); setWeightOz(''); setWeightGsm(''); setEditingGsm(false);
+    setWyzenbeek(''); setMartindale(''); setPerformanceRating('');
+    setWeightOz(''); setWeightGsm(''); setEditingGsm(false);
     setNfpa701(false); setNfpa260(false); setCa117(false); setSalePrice('');
     setSubmitted(null);
   }
@@ -122,10 +135,10 @@ export function CreateFabricForm({ customers }: { customers: { id: number; name:
     name, abbreviation, ownerType, ownerName: customerName, supplier,
     width, printWidth, country, perThouWeight, htsRaw, htsPrinted,
     content1, pct1, content2, pct2, content3, pct3,
-    wyzenbeek, martindale, weightOz, weightGsm,
+    wyzenbeek, martindale, performanceRating, weightOz, weightGsm,
     nfpa701, nfpa260, ca117, salePrice,
   }), [name, abbreviation, ownerType, customerName, supplier, width, printWidth, country, perThouWeight, htsRaw, htsPrinted,
-       content1, pct1, content2, pct2, content3, pct3, wyzenbeek, martindale, weightOz, weightGsm,
+       content1, pct1, content2, pct2, content3, pct3, wyzenbeek, martindale, performanceRating, weightOz, weightGsm,
        nfpa701, nfpa260, ca117, salePrice]);
 
   if (submitted) {
@@ -313,28 +326,43 @@ export function CreateFabricForm({ customers }: { customers: { id: number; name:
 
         {/* Performance */}
         <Card>
-          <CardHeader title="Performance" subtitle="Abrasion tests + weight. Weight fields auto-convert between oz/yd² and g/m²." />
-          <div className="p-5 grid grid-cols-4 gap-4">
-            <Field label="Wyzenbeek (double rubs)">
-              <input type="number" min="0" step="1000" value={wyzenbeek} onChange={(e) => setWyzenbeek(e.target.value)}
-                placeholder="e.g. 30000" className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full font-mono" />
-            </Field>
-            <Field label="Martindale (cycles)">
-              <input type="number" min="0" step="1000" value={martindale} onChange={(e) => setMartindale(e.target.value)}
-                placeholder="e.g. 40000" className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full font-mono" />
-            </Field>
-            <Field label="Weight (oz/yd²)">
-              <input type="number" min="0" step="0.1" value={weightOz}
-                onFocus={() => setEditingGsm(false)}
-                onChange={(e) => setWeightOz(e.target.value)}
-                placeholder="e.g. 8.8" className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full font-mono" />
-            </Field>
-            <Field label="Weight (g/m²)">
-              <input type="number" min="0" step="1" value={weightGsm}
-                onFocus={() => setEditingGsm(true)}
-                onChange={(e) => setWeightGsm(e.target.value)}
-                placeholder="auto" className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full font-mono" />
-            </Field>
+          <CardHeader title="Performance" subtitle="Report Wyzenbeek (US standard) OR Martindale (European standard) — one is usually run, not both. Then pick the Performance Rating that summarizes the result." />
+          <div className="p-5 space-y-4">
+            <div className="grid grid-cols-3 gap-4">
+              <Field label="Wyzenbeek (double rubs)">
+                <input type="number" min="0" step="1000" value={wyzenbeek} onChange={(e) => setWyzenbeek(e.target.value)}
+                  placeholder="e.g. 30000" className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full font-mono" />
+              </Field>
+              <Field label="Martindale (cycles)">
+                <input type="number" min="0" step="1000" value={martindale} onChange={(e) => setMartindale(e.target.value)}
+                  placeholder="e.g. 40000" className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full font-mono" />
+              </Field>
+              <Field label="Performance Rating">
+                <select value={performanceRating} onChange={(e) => setPerformanceRating(e.target.value)}
+                  className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full">
+                  <option value="">—</option>
+                  {PERFORMANCE_RATINGS.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-4 max-w-md">
+              <Field label="Weight (oz/yd²)">
+                <input type="number" min="0" step="0.1" value={weightOz}
+                  onFocus={() => setEditingGsm(false)}
+                  onChange={(e) => setWeightOz(e.target.value)}
+                  placeholder="e.g. 8.8" className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full font-mono" />
+              </Field>
+              <Field label="Weight (g/m²)">
+                <input type="number" min="0" step="1" value={weightGsm}
+                  onFocus={() => setEditingGsm(true)}
+                  onChange={(e) => setWeightGsm(e.target.value)}
+                  placeholder="auto" className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full font-mono" />
+              </Field>
+            </div>
+            <div className="text-[10px] text-gray-500 italic border-l-2 border-gray-300 pl-3">
+              Rough mapping — Wyzenbeek: &lt;9k Decorative · 9-15k Medium · 15-30k Heavy · 30-50k Heavy Plus · 50k+ Commercial.
+              Martindale: &lt;10k Decorative · 10-20k Medium · 20-40k Heavy · 40-60k Heavy Plus · 60k+ Commercial.
+            </div>
           </div>
         </Card>
 
@@ -386,7 +414,7 @@ export function CreateFabricForm({ customers }: { customers: { id: number; name:
       </form>
 
       {showPreview && (
-        <TechSheetPreview fabric={fabricSnapshot} onClose={() => setShowPreview(false)} />
+        <FabricTechSheet fabric={fabricSnapshot} onClose={() => setShowPreview(false)} />
       )}
     </div>
   );
