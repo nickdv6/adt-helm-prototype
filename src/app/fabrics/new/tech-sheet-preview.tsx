@@ -16,7 +16,8 @@ export type FabricSnapshot = {
   printWidth: string;
   country: string;
   perThouWeight: string;
-  htsCode: string;
+  htsRaw: string;
+  htsPrinted: string;
   content1: string; pct1: string;
   content2: string; pct2: string;
   content3: string; pct3: string;
@@ -100,7 +101,8 @@ export function TechSheetPreview({ fabric, onClose }: { fabric: FabricSnapshot; 
                 <Section title="Martindale" value={fabric.martindale ? `${Number(fabric.martindale).toLocaleString()} cycles` : '—'} />
                 <Section title="Country of Origin" value={fabric.country || '—'} />
                 <Section title="Supplier" value={fabric.supplier || '—'} />
-                <Section title="HTS Code (US import)" value={fabric.htsCode || '—'} />
+                <Section title="HTS — Raw (as imported)" value={fabric.htsRaw || '—'} />
+                <Section title="HTS — Printed (outbound)" value={fabric.htsPrinted || '—'} />
               </div>
 
               <Section title="Flammability Compliance" value={compliance} />
@@ -113,6 +115,11 @@ export function TechSheetPreview({ fabric, onClose }: { fabric: FabricSnapshot; 
               <div className="pt-4 mt-4 border-t border-gray-200 text-[9px] text-gray-500 leading-relaxed">
                 <div className="font-semibold text-gray-700 mb-1">Notes</div>
                 <div>Specifications subject to mill variance. Confirm latest test results with ADT before placing orders against this spec. Tech sheet generated {new Date().toLocaleDateString()}.</div>
+                {(fabric.htsRaw || fabric.htsPrinted) && (
+                  <div className="mt-2">
+                    <span className="font-semibold text-gray-700">HTS guidance:</span> use the <em>Raw</em> code only if shipping un-printed yardage. When shipping ADT-printed fabric, use the <em>Printed</em> code. Finished products (pillows, curtains, made-up articles) carry their own HTS at the product level.
+                  </div>
+                )}
                 <div className="mt-2">Advanced Digital Textiles · adt.com · hello@adt.com</div>
               </div>
             </div>

@@ -25,7 +25,10 @@ export function CreateFabricForm({ customers }: { customers: { id: number; name:
   const [printWidth, setPrintWidth] = useState('');
   const [country, setCountry] = useState('');
   const [perThouWeight, setPerThouWeight] = useState('');
-  const [htsCode, setHtsCode] = useState('');
+  // Two HTS codes — fabric reclassifies after printing, so customers
+  // shipping printed yardage need a different code than ADT used on import.
+  const [htsRaw, setHtsRaw] = useState('');
+  const [htsPrinted, setHtsPrinted] = useState('');
 
   // Composition
   const [content1, setContent1] = useState('');
@@ -107,7 +110,8 @@ export function CreateFabricForm({ customers }: { customers: { id: number; name:
 
   function reset() {
     setName(''); setAbbreviation(''); setOwnerType('adt'); setOwnerId(''); setSupplier('');
-    setWidth(''); setPrintWidth(''); setCountry(''); setPerThouWeight(''); setHtsCode('');
+    setWidth(''); setPrintWidth(''); setCountry(''); setPerThouWeight('');
+    setHtsRaw(''); setHtsPrinted('');
     setContent1(''); setPct1(''); setContent2(''); setPct2(''); setContent3(''); setPct3('');
     setWyzenbeek(''); setMartindale(''); setWeightOz(''); setWeightGsm(''); setEditingGsm(false);
     setNfpa701(false); setNfpa260(false); setCa117(false); setSalePrice('');
@@ -116,11 +120,11 @@ export function CreateFabricForm({ customers }: { customers: { id: number; name:
 
   const fabricSnapshot = useMemo(() => ({
     name, abbreviation, ownerType, ownerName: customerName, supplier,
-    width, printWidth, country, perThouWeight, htsCode,
+    width, printWidth, country, perThouWeight, htsRaw, htsPrinted,
     content1, pct1, content2, pct2, content3, pct3,
     wyzenbeek, martindale, weightOz, weightGsm,
     nfpa701, nfpa260, ca117, salePrice,
-  }), [name, abbreviation, ownerType, customerName, supplier, width, printWidth, country, perThouWeight, htsCode,
+  }), [name, abbreviation, ownerType, customerName, supplier, width, printWidth, country, perThouWeight, htsRaw, htsPrinted,
        content1, pct1, content2, pct2, content3, pct3, wyzenbeek, martindale, weightOz, weightGsm,
        nfpa701, nfpa260, ca117, salePrice]);
 
@@ -240,20 +244,37 @@ export function CreateFabricForm({ customers }: { customers: { id: number; name:
                   {COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
               </Field>
-              <div className="col-span-2">
+              <div>
                 <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
-                  HTS Code <span className="font-normal normal-case text-gray-400 tracking-normal">— US import classification</span>
+                  HTS — Raw <span className="font-normal normal-case text-gray-400 tracking-normal">(as imported)</span>
                 </label>
-                <input type="text" value={htsCode}
-                  onChange={(e) => setHtsCode(e.target.value)}
+                <input type="text" value={htsRaw}
+                  onChange={(e) => setHtsRaw(e.target.value)}
                   placeholder="e.g. 5208.52.30"
                   pattern="[0-9]{4}\.[0-9]{2}\.[0-9]{2,4}"
-                  className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full font-mono max-w-xs" />
-                <div className="text-[10px] text-gray-500 mt-1">
-                  10-digit Harmonized Tariff Schedule code (NNNN.NN.NNNN). Used by US Customs to assess duties on imported fabric.
-                  Look up at <a href="https://hts.usitc.gov" target="_blank" rel="noreferrer" className="text-navy-700 underline">hts.usitc.gov</a>.
+                  className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full font-mono" />
+                <div className="text-[10px] text-gray-500 mt-1 leading-tight">
+                  Code ADT uses on import from the mill (raw / PFP / greige).
                 </div>
               </div>
+              <div>
+                <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">
+                  HTS — Printed <span className="font-normal normal-case text-gray-400 tracking-normal">(outbound)</span>
+                </label>
+                <input type="text" value={htsPrinted}
+                  onChange={(e) => setHtsPrinted(e.target.value)}
+                  placeholder="e.g. 5208.59.20"
+                  pattern="[0-9]{4}\.[0-9]{2}\.[0-9]{2,4}"
+                  className="text-sm border border-gray-300 rounded px-2 py-1.5 w-full font-mono" />
+                <div className="text-[10px] text-gray-500 mt-1 leading-tight">
+                  Code customers use when shipping the printed yardage onward.
+                </div>
+              </div>
+            </div>
+            <div className="text-[10px] text-gray-500 italic border-l-2 border-gray-300 pl-3">
+              Why two codes? Fabric reclassifies after printing — same base cloth gets a different sub-heading.
+              Finished products (pillow covers, curtains, etc.) have their own HTS at the SKU level.
+              Look up at <a href="https://hts.usitc.gov" target="_blank" rel="noreferrer" className="text-navy-700 underline">hts.usitc.gov</a>.
             </div>
           </div>
         </Card>
