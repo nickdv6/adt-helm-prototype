@@ -16,6 +16,7 @@ export type FabricSnapshot = {
   printWidth: string;
   country: string;
   perThouWeight: string;
+  htsCode: string;
   content1: string; pct1: string;
   content2: string; pct2: string;
   content3: string; pct3: string;
@@ -99,6 +100,7 @@ export function TechSheetPreview({ fabric, onClose }: { fabric: FabricSnapshot; 
                 <Section title="Martindale" value={fabric.martindale ? `${Number(fabric.martindale).toLocaleString()} cycles` : '—'} />
                 <Section title="Country of Origin" value={fabric.country || '—'} />
                 <Section title="Supplier" value={fabric.supplier || '—'} />
+                <Section title="HTS Code (US import)" value={fabric.htsCode || '—'} />
               </div>
 
               <Section title="Flammability Compliance" value={compliance} />
