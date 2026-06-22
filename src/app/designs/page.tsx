@@ -74,7 +74,9 @@ export default function DesignDashboard({ searchParams }: {
           <Link href="/designs/import" className="inline-flex items-center justify-center font-semibold rounded transition-colors px-3.5 py-2 text-sm bg-white text-navy-700 border border-gray-300 hover:bg-gray-50">
             <Upload className="w-3.5 h-3.5 mr-1" />Bulk Import CSV
           </Link>
-          <Button><Plus className="w-3.5 h-3.5 mr-1" />Add Design</Button>
+          <Link href="/designs/new" className="inline-flex items-center justify-center font-semibold rounded transition-colors px-3.5 py-2 text-sm bg-navy-700 text-white hover:bg-navy-900">
+            <Plus className="w-3.5 h-3.5 mr-1" />Add Design
+          </Link>
         </div>
       </header>
 

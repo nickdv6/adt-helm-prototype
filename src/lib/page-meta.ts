@@ -144,6 +144,8 @@ export const PAGES: PageMeta[] = [
     category: 'Admin', wave: 'Wave 1', dataSource: 'live', sourcePath: 'app/designs/page.tsx' },
   { path: '/designs/import',title: 'Bulk Import Designs',         summary: 'CSV upload: design + colorway + UNC file path with validation + dup-detection + PLANT# auto-assign.',
     category: 'Admin', wave: 'Wave 1', dataSource: 'mock', dataNote: 'Client-side parse + mock commit; production needs server action + transaction.', sourcePath: 'app/designs/import/page.tsx' },
+  { path: '/designs/new',   title: 'Create Design',               summary: 'Single-design form: owner, name, auto-PLANT#, per-colorway customer file upload + notes + SKU.',
+    category: 'Admin', wave: 'Wave 1', dataSource: 'mock', dataNote: 'Form submits in-memory; production writes to designs + colorways + artwork_files in one transaction.', sourcePath: 'app/designs/new/page.tsx' },
   { path: '/roadmaps',      title: 'Roadmap Builder',             summary: '7 routes (R1-R8) with live in-flight counts, station preview, assignment rules.',
     category: 'Admin', blueprintId: 'S22', wave: 'Wave 1', dataSource: 'mixed', sourcePath: 'app/roadmaps/page.tsx' },
   { path: '/customer-configs', title: 'Customer Configs',         summary: 'Customer onboarding + SKU mapping + intake config.',
