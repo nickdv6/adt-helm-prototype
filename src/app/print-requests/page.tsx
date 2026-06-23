@@ -72,7 +72,8 @@ export default function PrintRequestDashboard({ searchParams }: { searchParams: 
   const prs = db.prepare(`
     SELECT pr.id, pr.pr_number, pr.status, pr.planned_yardage, pr.printed_yardage,
            pr.is_click_and_print, pr.was_csv_auto_routed, pr.internal_proof_status,
-           pr.reprint_of_pr_id, pr.print_process,
+           pr.reprint_of_pr_id, pr.reprint_reason_code, pr.print_process,
+           parent_pr.pr_number as parent_pr_number,
            ol.order_id,
            o.order_number, o.adt_promised_date, o.estimated_ship_date,
            o.is_rush, o.status as order_status,
@@ -98,6 +99,7 @@ export default function PrintRequestDashboard({ searchParams }: { searchParams: 
     LEFT JOIN colorways cw ON ol.colorway_id = cw.id
     LEFT JOIN fabrics f ON pr.fabric_id = f.id
     LEFT JOIN users u ON pr.assigned_to_user_id = u.id
+    LEFT JOIN print_requests parent_pr ON pr.reprint_of_pr_id = parent_pr.id
     WHERE ${where}
     ORDER BY priority_rank ASC,
              COALESCE(date(o.adt_promised_date), date(o.estimated_ship_date)) ASC,
@@ -260,13 +262,24 @@ function PRRow({ pr }: { pr: any }) {
             {pr.pr_number}
           </Link>
           {pr.plant_number && <span className="font-mono text-[10px] text-gray-400">{pr.plant_number}</span>}
-          {isReprint && <Tag color="yellow">Reprint</Tag>}
+          {isReprint && (
+            pr.reprint_of_pr_id ? (
+              <Link
+                href={`/print-requests/${pr.reprint_of_pr_id}`}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-yellow-100 text-yellow-900 hover:bg-yellow-200"
+                title={`Reprint of ${pr.parent_pr_number ?? 'parent PR'}${pr.reprint_reason_code ? ' · ' + pr.reprint_reason_code : ''}`}
+              >
+                Reprint of {pr.parent_pr_number ?? '—'}
+              </Link>
+            ) : <Tag color="yellow">Reprint</Tag>
+          )}
           {isRushActive && <Tag color="red">Rush</Tag>}
           {isLate && <Tag color="red">Late</Tag>}
         </div>
         <div className="text-[11px] text-gray-500 mt-0.5">
           <Link href={`/orders/${pr.order_id}`} className="font-mono hover:underline">{pr.order_number}</Link>
           <span className="ml-2">{pr.company_name}</span>
+          {pr.reprint_reason_code && <span className="ml-2 text-yellow-700 italic">· reason: {pr.reprint_reason_code}</span>}
         </div>
       </td>
 

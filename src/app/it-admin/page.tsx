@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { getDb } from '@/lib/db';
 import { Card, CardHeader, Tag, Button, StatusPill } from '@/components/ui';
 import { relativeTime } from '@/lib/utils';
+import { MockSurfaceBanner } from '@/components/mock-surface-banner';
 import {
   CheckCircle2, AlertTriangle, XCircle, RotateCw, Search, UserPlus, UserMinus,
   Activity, KeyRound, ExternalLink, Plug,
@@ -128,6 +129,7 @@ export default function ITAdminHome() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-5 pb-12">
+      <MockSurfaceBanner reason="Integration health tiles (QB, Shopify, HubSpot, etc.) are hardcoded mock — no live probes. NeoStampa Sync Agents + Hot Folders panels read live seed data; Vendor Risk panel is documentation. Production needs ping endpoints for each integration." />
       <header>
         <h1 className="text-2xl font-bold text-navy-900">IT / System Admin Home</h1>
         <p className="text-sm text-gray-500 mt-1">

@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Card, CardHeader, Tag, Button } from '@/components/ui';
+import { MockSurfaceBanner } from '@/components/mock-surface-banner';
 
 // /batch-ticket — C24 Digital Batch Ticket + Transfer Press Scan-Confirm
 //
@@ -55,6 +56,7 @@ export default function BatchTicket({ searchParams }: { searchParams: { view?: s
   const view = searchParams?.view ?? 'lucio';
   return (
     <div className="max-w-7xl mx-auto space-y-6">
+      <MockSurfaceBanner reason="Heat-press batch grouping + scan-confirm flow is UI only. No batch table or persistence — batches vanish on reload. Production needs heat_press_batches table + Brother label printer integration." />
       <header>
         <h1 className="text-2xl font-bold text-navy-900">Digital Batch Ticket (C24)</h1>
         <p className="text-sm text-gray-500 mt-1">

@@ -101,8 +101,9 @@ export default function Landing() {
           <PersonaLink href="/receiving-home" name="Tomás Rivera"     role="Receiving" />
           <PersonaLink href="/accounting-home" name="Diana Park"      role="Accounting" />
         </div>
-        <div className="px-5 pb-4 text-xs text-gray-500 italic">
-          Tip: the persona switcher in the top-right of the topbar deep-links you straight to a chosen role&apos;s home.
+        <div className="px-5 pb-4 text-xs text-gray-500 italic space-y-1">
+          <div>Tip: the persona switcher in the top-right of the topbar deep-links you straight to a chosen role&apos;s home.</div>
+          <div>Bonus tip: switching persona also re-prioritizes the left sidebar — the items that role uses every day rise to the top, the rest collapse into &quot;More — all sections&quot;. Try it.</div>
         </div>
       </Card>
 

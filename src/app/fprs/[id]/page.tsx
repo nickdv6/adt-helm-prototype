@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getDb } from '@/lib/db';
 import { Card, CardHeader, Tag, StatusPill, Button } from '@/components/ui';
-import { formatDate, formatPromised } from '@/lib/utils';
+import { formatDate } from '@/lib/utils';
 import { TechSheetButton, type TechSheetData } from '@/components/tech-sheet-button';
 import { ChevronLeft } from 'lucide-react';
 
@@ -41,7 +41,6 @@ export default function FPRDetail({ params }: { params: { id: string } }) {
 
   if (!fpr) notFound();
 
-  const promised = formatPromised(fpr.adt_promised_date || fpr.estimated_ship_date);
   // Convenience: derive Throw Pillow construction details from product_type + size + fabric
   // (mock for prototype — in production these would come from a tech_sheet table or per-FPR fields)
   const isPillow = fpr.product_type === 'pillow';

@@ -5,6 +5,7 @@ import {
   ArrowRight, Wand2, AlertTriangle, CheckCircle2, Clock, RotateCw, FileText, Printer,
   ScanLine, Layers, FileWarning, Settings, Activity, ImagePlus,
 } from 'lucide-react';
+import { MockSurfaceBanner } from '@/components/mock-surface-banner';
 
 // /intake — Automated Print Intake Command Center
 // Per Nick: extends the existing CSV/XML intake page into the front end of the automated
@@ -178,6 +179,7 @@ const METRICS = {
 export default function IntakeCommandCenter() {
   return (
     <div className="max-w-7xl mx-auto space-y-5 pb-12">
+      <MockSurfaceBanner reason="Pipeline orchestration, strike-off feed, submissions, scan feed, and composite queue are mock UI. Real CSV/XML parsers don't exist yet — production needs per-customer parser + Customer Configs persistence." />
       <header>
         <h1 className="text-2xl font-bold text-navy-900">Intake Command Center</h1>
         <p className="text-sm text-gray-500 mt-1">

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { ScanLine, Printer, RotateCcw, AlertTriangle, CheckCircle2, X } from 'lucide-react';
 import { Card, CardHeader, Tag, Button } from '@/components/ui';
 import { insertDisplay } from '@/lib/insert-mapping';
+import { MockSurfaceBanner } from '@/components/mock-surface-banner';
 
 // /cut-station — CUT operator scan-to-label workflow
 // Operator scans the Traveler QR (printed below each print). Helm looks up all line items
@@ -131,6 +132,7 @@ export default function CutStation() {
 
   return (
     <div className="max-w-6xl mx-auto pb-12 space-y-5">
+      <MockSurfaceBanner reason="Sample scan payloads + 'Print CUT label' button do not integrate with the Zebra ZT400 yet. Production needs printer driver + Bundle QR generation persistence." />
       <header>
         <h1 className="text-2xl font-bold text-navy-900">CUT Station · Scan & Label</h1>
         <p className="text-sm text-gray-500 mt-1">

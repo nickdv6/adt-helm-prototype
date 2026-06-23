@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Upload, FileText, CheckCircle2, AlertTriangle, XCircle, Loader2, Send, Pencil, Trash2 } from 'lucide-react';
 import { Card, CardHeader, Tag, Button } from '@/components/ui';
+import { MockSurfaceBanner } from '@/components/mock-surface-banner';
 
 // /po-intake — PDF Purchase Order intake workspace
 // Per Nick: '35 different POs yesterday' — needs to be automated. Admin drags a stack of PDF POs,
@@ -355,6 +356,7 @@ export default function POIntake() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-5">
+      <MockSurfaceBanner reason="Only the Kravet 2581754 demo PO is real-parsed. Queue rows are mock stubs; OCR pipeline + order-creation handoff are not wired. Production needs PDF OCR + auto-create-order trigger on Confirm." />
       <header>
         <h1 className="text-2xl font-bold text-navy-900">PDF PO Intake</h1>
         <p className="text-sm text-gray-500 mt-1">

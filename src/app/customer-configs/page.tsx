@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Plus, Trash2, Upload, Download, FileCheck, FolderInput, FolderOutput, Archive, KeyRound, Search, X, Pencil, Wand2 } from 'lucide-react';
 import { Card, CardHeader, Tag, Button } from '@/components/ui';
+import { MockSurfaceBanner } from '@/components/mock-surface-banner';
 
 // /customer-configs — Admin tool to set up a new CSV/XML customer's intake pipeline.
 // Per Nick: this is the configuration surface. Admin defines source folders, field mappings,
@@ -361,6 +362,9 @@ export default function CustomerConfigsAdmin() {
 
   return (
     <div className="max-w-7xl mx-auto pb-32">
+      <div className="mb-4">
+        <MockSurfaceBanner reason="Customer presets, field mappings, and transform rules don't persist — edits vanish on page reload. Not yet wired to /intake. Production needs intake_configs table + a real mapping UI." />
+      </div>
       <header className="mb-6">
         <h1 className="text-2xl font-bold text-navy-900">Customer CSV/XML Configurations</h1>
         <p className="text-sm text-gray-500 mt-1">

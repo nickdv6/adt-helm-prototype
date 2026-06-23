@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { Card, CardHeader, Tag, Button } from '@/components/ui';
+import { MockSurfaceBanner } from '@/components/mock-surface-banner';
 
 // /exceptions — C13 Exception Center
 // Per Wave 1 Core Scope: centralized framework with status lifecycle
@@ -163,6 +164,7 @@ export default function ExceptionCenter({ searchParams }: { searchParams: { stat
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
+      <MockSurfaceBanner reason="No exceptions table in schema yet — the 20 sample rows below are inline mock. Sidebar badge count is static. Production needs schema + bidirectional links from PR/Order detail." />
       <header>
         <h1 className="text-2xl font-bold text-navy-900">Exception Center (C13)</h1>
         <p className="text-sm text-gray-500 mt-1">

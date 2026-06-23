@@ -19,6 +19,7 @@ export function PrototypeBanner() {
       <span className="opacity-60">·</span>
       <Link href="/" className="underline hover:no-underline">Tour</Link>
       <Link href="/sitemap" className="underline hover:no-underline">Sitemap</Link>
+      <Link href="/glossary" className="underline hover:no-underline">Glossary</Link>
       <Link href="/changelog" className="underline hover:no-underline">Changelog</Link>
     </div>
   );

@@ -275,8 +275,11 @@ CREATE TABLE IF NOT EXISTS orders (
   primary_contact_id INTEGER,
   ship_to_address_id INTEGER,
   roadmap TEXT NOT NULL, -- R1 | R2 | R4 | R5 | R6 | R7 | R8
-  status TEXT NOT NULL DEFAULT 'Draft', -- Order lifecycle per 6.6 + Megan E1
-  customer_facing_status TEXT, -- 6-state per 6.5
+  status TEXT NOT NULL DEFAULT 'Draft',
+  -- values: Draft | Validated | Waiting on Approval | Approved | In Production | Partially Complete | Ready to Ship | Shipped | Invoiced | Closed | On Hold | Cancelled
+  -- See 6.6 + Megan E1 for transition rules. 'Ready to Ship' is reached when all PRs are Complete and all rolls packed (filter on /shipping).
+  customer_facing_status TEXT,
+  -- values (customer-facing 6-state per 6.5): Received | In Production | Ready to Ship | Shipped | Delivered | Cancelled
   customer_requested_date TEXT,
   estimated_ship_date TEXT,  -- Set at order entry. Provisional / internal estimate, no promise to the customer yet.
   adt_promised_date TEXT,    -- Set only when the order is approved (internally or by the customer). This is the
@@ -387,6 +390,8 @@ CREATE TABLE IF NOT EXISTS print_requests (
   fabric_id INTEGER,
   print_process TEXT, -- reactive | pigment | dye_sublimation | latex | direct_disperse | other_manual_review
   status TEXT NOT NULL DEFAULT 'Draft',
+  -- values: Draft | Pending Profile | Pending Approval | Approved | Ready for Scheduling | Scheduled | Printing | Printed | Pending Internal Proof | On Hold | Issue — Contact Us | Complete | Cancelled
+  -- 'Open PR' across dashboards = status NOT IN ('Complete', 'Cancelled').
   planned_yardage REAL,
   printed_yardage REAL,
   reprint_of_pr_id INTEGER, -- recursive per 6.10
@@ -429,7 +434,10 @@ CREATE TABLE IF NOT EXISTS print_requests (
   -- signed off on) or when the colorist promotes a draft direct to production.
   -- Helm-side dispatcher uses artwork_files.nas_path for this id, not "the most recent file".
   production_artwork_file_id INTEGER,
-  rip_status TEXT NOT NULL DEFAULT 'not_started',    -- 12-state RIP lifecycle (see rip_jobs.status comments)
+  rip_status TEXT NOT NULL DEFAULT 'not_started',
+  -- 12-state RIP lifecycle, DENORMALIZED from rip_jobs.status for fast dashboard queries.
+  -- DO NOT WRITE TO THIS DIRECTLY — rip_jobs.status is source of truth; updates flow through /api/rip-events.
+  -- values: not_started | ready_for_rip | package_created | submitted | accepted | ripping | rip_complete | queued_for_print | printing | print_complete_software | print_complete_qr | error | held
   rip_retry_count INTEGER NOT NULL DEFAULT 0,
   rip_last_event_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -519,7 +527,9 @@ CREATE TABLE IF NOT EXISTS rip_jobs (
   neostampa_job_id TEXT,
   fabric_output_id INTEGER,
   external_job_name TEXT NOT NULL UNIQUE,            -- For Helm-originated: CUSTOMER_PR-#_FO-#_DESIGN_COLORWAY_yyYD. For Canvas-originated: the artwork filename the colorist saved.
-  status TEXT NOT NULL DEFAULT 'ready_for_rip',      -- 12-state flow
+  status TEXT NOT NULL DEFAULT 'ready_for_rip',
+  -- 12-state RIP flow (source of truth — print_requests.rip_status mirrors this):
+  -- not_started | ready_for_rip | package_created | submitted | accepted | ripping | rip_complete | queued_for_print | printing | print_complete_software | print_complete_qr | error | held
   hot_folder_id INTEGER,
   neostampa_agent_id INTEGER,
   package_path TEXT,                                 -- UNC to the composite package
@@ -604,6 +614,8 @@ CREATE TABLE IF NOT EXISTS strike_offs (
   print_request_id INTEGER NOT NULL,
   artwork_file_id INTEGER,
   status TEXT NOT NULL DEFAULT 'Requested',
+  -- 14 values: Requested | In Queue | In Color Matching | Printing | Quality Check | Awaiting Approval | Customer Reviewing | Approved | Approve with Changes | Rejected | Revision Required | On Hold | Cancelled | Closed
+  -- Source: hardcoded STATUS_COLORS map in /strike-offs page. Should be lifted to a shared constant in src/lib.
   customer_decision_at TEXT,
   customer_decision_outcome TEXT, -- Approved | Approve with Changes | Rejected | Revision Required
   customer_change_notes TEXT,
@@ -640,6 +652,7 @@ CREATE TABLE IF NOT EXISTS fprs (
   order_line_id INTEGER NOT NULL,
   print_request_id INTEGER,
   status TEXT NOT NULL DEFAULT 'Created',
+  -- values: Created | Awaiting Material | Awaiting Cut | Cutting | Cut Complete | Awaiting Sew | Sewing | Awaiting QC | QC Passed | Ready to Ship | Shipped | Cancelled
   packaging_profile_override_id INTEGER, -- per-FPR override per S23-S32.34
   missing_component_override_json TEXT, -- S23-S32.33 reason code + actor + timestamp
   FOREIGN KEY (order_line_id) REFERENCES order_lines(id),
@@ -660,6 +673,7 @@ CREATE TABLE IF NOT EXISTS inventory_items (
   consumed_qty REAL NOT NULL DEFAULT 0,
   low_stock_threshold REAL NOT NULL DEFAULT 10,
   status TEXT NOT NULL DEFAULT 'Available',
+  -- values: Available | LowStock | OutOfStock | Allocated | Discontinued
   FOREIGN KEY (fabric_id) REFERENCES fabrics(id)
 );
 
@@ -671,6 +685,7 @@ CREATE TABLE IF NOT EXISTS customer_materials (
   print_request_id INTEGER,
   fabric_description TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'Awaiting Material',
+  -- values: Awaiting Material | Received | Inspected | In Use | Depleted | Discarded
   received_qty REAL NOT NULL DEFAULT 0,
   consumed_qty REAL NOT NULL DEFAULT 0,
   remaining_qty REAL NOT NULL DEFAULT 0,
@@ -690,6 +705,7 @@ CREATE TABLE IF NOT EXISTS shipments (
   shipment_number TEXT NOT NULL UNIQUE,
   order_id INTEGER NOT NULL,
   status TEXT NOT NULL DEFAULT 'Not Ready',
+  -- values: Not Ready | Ready to Pack | Packed | Label Printed | Picked Up | In Transit | Delivered | Returned | Cancelled
   carrier TEXT, -- UPS | FedEx | USPS
   tracking_number TEXT,
   is_third_party_billed INTEGER NOT NULL DEFAULT 0,
@@ -742,7 +758,7 @@ CREATE TABLE IF NOT EXISTS intake_import_log (
   rows_total INTEGER,
   rows_succeeded INTEGER,
   rows_failed INTEGER,
-  status TEXT NOT NULL DEFAULT 'pending',
+  status TEXT NOT NULL DEFAULT 'pending', -- values: pending | running | succeeded | partial | failed
   FOREIGN KEY (intake_config_id) REFERENCES intake_configs(id)
 );
 

@@ -72,6 +72,26 @@ export default function OrderDetail({ params }: { params: { id: string } }) {
         <Stat label="PRs" value={prs.length} />
       </div>
 
+      {/* Ready-to-Ship transition hint (Phase 1 polish — visibility only).
+          Surfaces the rule for how an order reaches the /shipping dashboard. */}
+      {(() => {
+        const allPrsDone = prs.length > 0 && prs.every((p) => p.status === 'Complete' || p.status === 'Cancelled');
+        const showHint = order.status === 'In Production' || order.status === 'Partially Complete';
+        if (!showHint) return null;
+        return (
+          <div className={`rounded border px-4 py-3 text-sm ${allPrsDone ? 'bg-green-50 border-green-300 text-green-900' : 'bg-blue-50 border-blue-300 text-blue-900'}`}>
+            <div className="font-semibold mb-0.5">{allPrsDone ? 'Eligible for Ready to Ship' : 'Path to Ready to Ship'}</div>
+            <div className="text-xs">
+              {allPrsDone ? (
+                <>All PRs Complete · once rolls are packed, CSR can transition this order to <strong>Ready to Ship</strong>, then it appears on the <Link href="/shipping" className="underline">Shipping</Link> dashboard.</>
+              ) : (
+                <>Open PRs: <strong>{prs.filter((p) => p.status !== 'Complete' && p.status !== 'Cancelled').length}</strong> / {prs.length}. When all PRs reach <em>Complete</em> AND all rolls are packed, this order will be ready to transition to <strong>Ready to Ship</strong>.</>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* OD-3 approval gate detail if triggered */}
       {order.approval_required ? (
         <Card>

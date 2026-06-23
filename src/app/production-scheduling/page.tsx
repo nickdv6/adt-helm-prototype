@@ -5,6 +5,7 @@
 import Link from 'next/link';
 import { getDb } from '@/lib/db';
 import { Card, CardHeader, Tag } from '@/components/ui';
+import { MockSurfaceBanner } from '@/components/mock-surface-banner';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,6 +68,7 @@ export default function ProductionScheduling() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
+      <MockSurfaceBanner reason="Per-printer daily capacity is mock constants — overbook detection is not actually checking real throughput. Drag-to-reschedule is also UI-only. Production needs printer_capacity_overrides table." />
       <header className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-navy-900">Production Scheduling</h1>
