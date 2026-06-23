@@ -113,10 +113,6 @@ export function FabricTechSheet({ fabric, onClose }: { fabric: FabricSnapshot; o
 
               <Section title="Flammability Compliance" value={compliance} />
 
-              {fabric.salePrice && (
-                <Section title="Sale Price" value={`$${Number(fabric.salePrice).toFixed(2)} / yd`} />
-              )}
-
               {/* Footer */}
               <div className="pt-4 mt-4 border-t border-gray-200 text-[9px] text-gray-500 leading-relaxed">
                 <div className="font-semibold text-gray-700 mb-1">Notes</div>
