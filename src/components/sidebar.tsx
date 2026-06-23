@@ -56,7 +56,7 @@ export function Sidebar() {
         <NavItem href="/inventory" icon={<Package className="w-4 h-4" />} label="Inventory" />
 
         <Section label="Operations" />
-        <NavItem href="/exceptions" icon={<AlertTriangle className="w-4 h-4" />} label="Exception Center" badge="6" />
+        <NavItem href="/exceptions" icon={<AlertTriangle className="w-4 h-4" />} label="Exception Center" badge="11" />
         <NavItem href="/packing-correction" icon={<Undo2 className="w-4 h-4" />} label="Packing Correction" />
 
         <Section label="Admin" />

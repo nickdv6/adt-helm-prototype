@@ -43,6 +43,21 @@ export default function PRDetail({ params }: { params: { id: string } }) {
     FROM print_requests WHERE reprint_of_pr_id = ?
   `).all(pr.id) as any[];
 
+  // RIP job + events (NeoStampa Phase 1)
+  const ripJob = pr.current_rip_job_id ? db.prepare(`
+    SELECT rj.*, hf.name as hot_folder_name, hf.unc_path as hot_folder_path,
+           a.name as agent_name, a.status as agent_status,
+           fo.qr_payload as fo_payload, fo.yards_produced
+    FROM rip_jobs rj
+    LEFT JOIN hot_folders hf ON rj.hot_folder_id = hf.id
+    LEFT JOIN neostampa_agents a ON rj.neostampa_agent_id = a.id
+    LEFT JOIN fabric_outputs fo ON rj.fabric_output_id = fo.id
+    WHERE rj.id = ?
+  `).get(pr.current_rip_job_id) as any : null;
+  const ripEvents = ripJob ? db.prepare(`
+    SELECT * FROM rip_job_events WHERE rip_job_id = ? ORDER BY event_at DESC LIMIT 30
+  `).all(ripJob.id) as any[] : [];
+
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       <header>
@@ -102,18 +117,88 @@ export default function PRDetail({ params }: { params: { id: string } }) {
             </Card>
           )}
 
-          {/* Traveler QR + Composite status card */}
-          {pr.traveler_composite_status && pr.traveler_composite_status !== 'not_required' && (
-            <Card className={pr.traveler_composite_status === 'failed' ? 'border-red-300' : ''}>
+          {/* RIP · NeoStampa Activity (replaces standalone composite card;
+              includes composite as the first stage of the 12-state lifecycle) */}
+          {ripJob && (
+            <Card className={ripJob.status === 'error' ? 'border-red-300' : ripJob.is_held ? 'border-yellow-300' : ''}>
               <CardHeader
-                title="Traveler QR · Composite"
-                subtitle="QR payload = lookup key · composite file generated before XML hits hot folder"
+                title="RIP · NeoStampa Activity"
+                subtitle={`External job: ${ripJob.external_job_name}`}
                 action={
-                  pr.traveler_composite_status === 'failed'
-                    ? <Button size="sm" variant="ghost"><RotateCcw className="w-3.5 h-3.5 mr-1" />Retry</Button>
+                  ripJob.status === 'error'
+                    ? <Button size="sm" variant="ghost"><RotateCcw className="w-3.5 h-3.5 mr-1" />Retry job</Button>
+                    : ripJob.is_held
+                    ? <Button size="sm" variant="ghost">Release Hold</Button>
                     : null
                 }
               />
+              <div className="px-5 py-3 grid grid-cols-2 gap-4 text-sm">
+                <Field label="RIP Status">
+                  <RipStatusPill status={ripJob.status} />
+                </Field>
+                <Field label="FabricOutput QR">
+                  <span className="font-mono text-navy-700 font-semibold">{ripJob.fo_payload ?? '—'}</span>
+                </Field>
+                <Field label="Hot Folder">
+                  <div className="text-xs">{ripJob.hot_folder_name ?? '—'}</div>
+                  {ripJob.hot_folder_path && (
+                    <div className="font-mono text-[10px] text-gray-500 break-all">{ripJob.hot_folder_path}</div>
+                  )}
+                </Field>
+                <Field label="NeoStampa Agent">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold">{ripJob.agent_name ?? '—'}</span>
+                    {ripJob.agent_status === 'online' && <Tag color="green">online</Tag>}
+                    {ripJob.agent_status === 'degraded' && <Tag color="yellow">degraded</Tag>}
+                    {ripJob.agent_status === 'offline' && <Tag color="red">offline</Tag>}
+                  </div>
+                </Field>
+                <Field label="Retries">
+                  <span className="font-mono">{ripJob.retry_count}</span>
+                  {ripJob.retry_count > 0 && <Tag color="yellow">retried</Tag>}
+                </Field>
+                <Field label="Yards Produced">
+                  {ripJob.yards_produced ? <span className="font-mono">{ripJob.yards_produced} yds</span> : <span className="text-gray-400 italic">pending</span>}
+                </Field>
+                {ripJob.is_held && (
+                  <div className="col-span-2 bg-yellow-50 border-l-4 border-yellow-400 px-3 py-2 rounded">
+                    <div className="text-[10px] uppercase tracking-wider text-yellow-700 font-semibold mb-0.5">Held</div>
+                    <span className="text-xs text-yellow-900">{ripJob.hold_reason}</span>
+                  </div>
+                )}
+                {ripJob.error_message && (
+                  <div className="col-span-2 bg-red-50 border-l-4 border-red-400 px-3 py-2 rounded">
+                    <div className="text-[10px] uppercase tracking-wider text-red-700 font-semibold mb-0.5">Error</div>
+                    <span className="text-xs text-red-900">{ripJob.error_message}</span>
+                  </div>
+                )}
+              </div>
+              {/* Event timeline */}
+              <div className="border-t border-gray-100 px-5 py-3">
+                <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-2">Event log ({ripEvents.length})</div>
+                <div className="space-y-1.5">
+                  {ripEvents.map((e) => (
+                    <div key={e.id} className="flex items-start gap-2 text-xs">
+                      <RipEventDot type={e.event_type} />
+                      <div className="flex-1 min-w-0">
+                        <span className="font-semibold text-navy-700">{e.event_type}</span>
+                        {e.source !== 'agent' && <Tag color={e.source === 'manual' ? 'blue' : 'gray'}>{e.source}</Tag>}
+                        {e.details && <span className="text-gray-600 ml-2 italic">{e.details}</span>}
+                      </div>
+                      <span className="text-gray-400 whitespace-nowrap">{relativeTime(e.event_at)}</span>
+                    </div>
+                  ))}
+                  {ripEvents.length === 0 && (
+                    <div className="text-xs text-gray-400 italic">No events yet.</div>
+                  )}
+                </div>
+              </div>
+            </Card>
+          )}
+          {/* If no RIP job yet (PR pre-rip), show traveler payload only */}
+          {!ripJob && pr.traveler_composite_status && pr.traveler_composite_status !== 'not_required' && (
+            <Card>
+              <CardHeader title="RIP · NeoStampa" subtitle="No RIP job yet — composite still in flight" />
               <div className="px-5 py-3 grid grid-cols-2 gap-4 text-sm">
                 <Field label="Traveler QR payload">
                   {pr.traveler_qr_payload
@@ -124,14 +209,6 @@ export default function PRDetail({ params }: { params: { id: string } }) {
                   {pr.traveler_composite_status === 'generated' && <span className="inline-flex items-center gap-1 text-green-700"><CheckCircle2 className="w-3.5 h-3.5" />Generated</span>}
                   {pr.traveler_composite_status === 'pending' && <span className="inline-flex items-center gap-1 text-blue-700"><ScanLine className="w-3.5 h-3.5" />Pending</span>}
                   {pr.traveler_composite_status === 'failed' && <span className="inline-flex items-center gap-1 text-red-700"><AlertTriangle className="w-3.5 h-3.5" />Failed</span>}
-                </Field>
-                <Field label="Generated">
-                  {pr.composite_generated_at ? relativeTime(pr.composite_generated_at) : <span className="text-gray-400">—</span>}
-                </Field>
-                <Field label="File path">
-                  {pr.traveler_composite_file_path
-                    ? <span className="font-mono text-[10px] text-gray-600 break-all">{pr.traveler_composite_file_path}</span>
-                    : <span className="text-gray-400 italic">—</span>}
                 </Field>
                 {pr.composite_error && (
                   <div className="col-span-2">
@@ -245,6 +322,36 @@ export default function PRDetail({ params }: { params: { id: string } }) {
       </div>
     </div>
   );
+}
+
+// RIP status pill — 12-state lifecycle colored by maturity
+function RipStatusPill({ status }: { status: string }) {
+  const map: Record<string, { color: 'gray' | 'blue' | 'yellow' | 'green' | 'red' | 'purple'; label: string }> = {
+    not_started:               { color: 'gray',   label: 'Not started' },
+    ready_for_rip:             { color: 'gray',   label: 'Ready for RIP' },
+    package_created:           { color: 'blue',   label: 'Package created' },
+    submitted:                 { color: 'blue',   label: 'Submitted' },
+    accepted:                  { color: 'blue',   label: 'Accepted' },
+    ripping:                   { color: 'blue',   label: 'RIP in progress' },
+    rip_complete:              { color: 'blue',   label: 'RIP complete' },
+    queued_for_print:          { color: 'purple', label: 'Queued for print' },
+    printing:                  { color: 'purple', label: 'Printing' },
+    print_complete_software:   { color: 'yellow', label: 'Print done · software' },
+    print_complete_qr:         { color: 'green',  label: 'Print done · QR confirmed' },
+    error:                     { color: 'red',    label: 'Error' },
+    held:                      { color: 'yellow', label: 'Held' },
+  };
+  const s = map[status] ?? { color: 'gray' as const, label: status };
+  return <Tag color={s.color}>{s.label}</Tag>;
+}
+
+function RipEventDot({ type }: { type: string }) {
+  const color = type === 'error' ? 'bg-helm-red'
+    : type === 'retried' ? 'bg-yellow-500'
+    : type === 'held' ? 'bg-yellow-500'
+    : type.includes('completed') || type === 'released' ? 'bg-green-500'
+    : 'bg-navy-700';
+  return <div className={`w-2 h-2 rounded-full ${color} mt-1.5 flex-shrink-0`} />;
 }
 
 function Field({ label, children, full }: { label: string; children: React.ReactNode; full?: boolean }) {

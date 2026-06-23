@@ -392,12 +392,126 @@ CREATE TABLE IF NOT EXISTS print_requests (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (order_line_id) REFERENCES order_lines(id),
   FOREIGN KEY (artwork_file_id) REFERENCES artwork_files(id),
+  -- NeoStampa Sync / RIP lifecycle (Phase 1 build): an explicit RIP job wraps
+  -- the existing composite step + adds NeoStampa hot-folder submission, agent
+  -- monitoring, and a 12-state lifecycle. external_job_name is the deterministic
+  -- name that follows the job through NeoStampa and back: CUSTOMER_PR-#_FO-#_DESIGN_COLORWAY_yyYD.
+  external_job_name TEXT,
+  fabric_output_id INTEGER,                          -- Parent QR record (one printed run = one FabricOutput)
+  current_rip_job_id INTEGER,                        -- The active/latest RipJob for this PR
+  rip_status TEXT NOT NULL DEFAULT 'not_started',    -- 'not_started' | 'ready_for_rip' | 'package_created' | 'submitted' | 'accepted' | 'ripping' | 'rip_complete' | 'queued_for_print' | 'printing' | 'print_complete_software' | 'print_complete_qr' | 'error' | 'held'
+  rip_retry_count INTEGER NOT NULL DEFAULT 0,
+  rip_last_event_at TEXT,
   FOREIGN KEY (printer_id) REFERENCES printers(id),
   FOREIGN KEY (fabric_id) REFERENCES fabrics(id),
   FOREIGN KEY (reprint_of_pr_id) REFERENCES print_requests(id),
   FOREIGN KEY (colorist_user_id) REFERENCES users(id),
   FOREIGN KEY (internal_proof_resolved_by_user_id) REFERENCES users(id)
 );
+
+-- ============================================================
+-- HOT FOLDERS — registry of NeoStampa hot folders per printer
+-- ============================================================
+-- One row per hot folder. Multiple hot folders may exist per printer if
+-- the RIP machine watches more than one path (e.g. RUSH vs STANDARD).
+CREATE TABLE IF NOT EXISTS hot_folders (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  printer_id INTEGER NOT NULL,
+  name TEXT NOT NULL,                                -- e.g. 'Durst-Alpha-STANDARD'
+  unc_path TEXT NOT NULL,                            -- e.g. '\\rip-bay-a\hotfolder\durst\standard\'
+  is_active INTEGER NOT NULL DEFAULT 1,
+  neostampa_agent_id INTEGER,                        -- which agent watches this folder
+  is_rush_lane INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY (printer_id) REFERENCES printers(id)
+);
+
+-- ============================================================
+-- NEOSTAMPA SYNC AGENTS — simulated local services on RIP machines
+-- ============================================================
+-- One per RIP computer. Sends heartbeats, monitors hot folders, reports
+-- NeoStampa events back to Helm. Used by the IT Admin agent panel.
+CREATE TABLE IF NOT EXISTS neostampa_agents (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,                                -- e.g. 'RIP-Bay-A'
+  hostname TEXT NOT NULL,                            -- e.g. 'rip-bay-a.adt.local'
+  version TEXT NOT NULL DEFAULT '1.0.0',
+  status TEXT NOT NULL DEFAULT 'online',             -- 'online' | 'offline' | 'degraded' | 'updating'
+  last_heartbeat_at TEXT,
+  uptime_seconds INTEGER NOT NULL DEFAULT 0,
+  jobs_processed_today INTEGER NOT NULL DEFAULT 0,
+  jobs_failed_today INTEGER NOT NULL DEFAULT 0,
+  neostampa_version TEXT,                            -- e.g. 'NeoStampa 11.2'
+  notes TEXT
+);
+
+-- ============================================================
+-- FABRIC OUTPUTS — the QR-tagged piece of printed fabric
+-- ============================================================
+-- The "first tier" QR record. One per printed run (typically 1:1 with a
+-- successful PR). Survives through finishing, cut, and bundling.
+CREATE TABLE IF NOT EXISTS fabric_outputs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  qr_payload TEXT NOT NULL UNIQUE,                   -- e.g. 'FO-98321'
+  print_request_id INTEGER NOT NULL,
+  generated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  yards_produced REAL,                               -- Actual printed yardage
+  status TEXT NOT NULL DEFAULT 'pending_print',      -- 'pending_print' | 'printed' | 'finishing' | 'cut' | 'bundled' | 'shipped'
+  FOREIGN KEY (print_request_id) REFERENCES print_requests(id)
+);
+
+-- ============================================================
+-- RIP JOBS — NeoStampa lifecycle wrapper around the composite step
+-- ============================================================
+-- A RipJob is created when a PR is ready for RIP. It moves through 12
+-- statuses, with events captured in rip_job_events. The same PR may have
+-- multiple RipJobs over its lifetime if reprocessed.
+CREATE TABLE IF NOT EXISTS rip_jobs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  print_request_id INTEGER NOT NULL,
+  fabric_output_id INTEGER,
+  external_job_name TEXT NOT NULL,                   -- CUSTOMER_PR-#_FO-#_DESIGN_COLORWAY_yyYD
+  status TEXT NOT NULL DEFAULT 'ready_for_rip',      -- 12-state flow
+  hot_folder_id INTEGER,
+  neostampa_agent_id INTEGER,
+  package_path TEXT,                                 -- UNC to the composite package
+  retry_count INTEGER NOT NULL DEFAULT 0,
+  is_held INTEGER NOT NULL DEFAULT 0,
+  hold_reason TEXT,
+  error_message TEXT,
+  submitted_at TEXT,
+  accepted_at TEXT,
+  rip_started_at TEXT,
+  rip_completed_at TEXT,
+  print_started_at TEXT,
+  print_completed_software_at TEXT,
+  print_completed_qr_at TEXT,                        -- Confirmed by physical QR scan (truth)
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (print_request_id) REFERENCES print_requests(id),
+  FOREIGN KEY (fabric_output_id) REFERENCES fabric_outputs(id),
+  FOREIGN KEY (hot_folder_id) REFERENCES hot_folders(id),
+  FOREIGN KEY (neostampa_agent_id) REFERENCES neostampa_agents(id)
+);
+CREATE INDEX IF NOT EXISTS idx_rip_jobs_pr_id ON rip_jobs(print_request_id);
+CREATE INDEX IF NOT EXISTS idx_rip_jobs_status ON rip_jobs(status);
+
+-- ============================================================
+-- RIP JOB EVENTS — append-only event log for each RipJob
+-- ============================================================
+-- Captures every state change + retry + manual override + error. Drives
+-- the RIP Activity timeline on PR Detail and the Auto-RIP Engine panel
+-- on the Intake Command Center.
+CREATE TABLE IF NOT EXISTS rip_job_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  rip_job_id INTEGER NOT NULL,
+  event_type TEXT NOT NULL,                          -- 'package_created' | 'submitted' | 'accepted' | 'rip_started' | 'rip_completed' | 'print_started' | 'print_completed_software' | 'print_completed_qr' | 'error' | 'retried' | 'held' | 'released' | 'manual_override'
+  event_at TEXT NOT NULL DEFAULT (datetime('now')),
+  source TEXT NOT NULL DEFAULT 'agent',              -- 'agent' | 'manual' | 'system'
+  user_id INTEGER,                                   -- Set on manual events
+  details TEXT,                                      -- Free-text or JSON payload
+  FOREIGN KEY (rip_job_id) REFERENCES rip_jobs(id),
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+CREATE INDEX IF NOT EXISTS idx_rip_job_events_job_id ON rip_job_events(rip_job_id);
 
 -- ============================================================
 -- PR ROLLS — each row is one physical roll cut from a PR's printed yardage

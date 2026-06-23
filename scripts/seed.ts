@@ -736,6 +736,253 @@ fabrics.forEach((f) => {
   insInv.run('fabric', f.id, f.name, avail, reserved, threshold, status);
 });
 
+// ============================================================
+// NeoStampa Sync — Phase 1 seed
+// ============================================================
+// 4 RIP machines (one agent per machine). Multiple printers may share an agent.
+// Mapping: Durst Alpha 330 → RIP-Bay-A, MS JP7 → RIP-Bay-B, MS JP4-A/B → RIP-Bay-C,
+//          Zimmer Colaris + HP Latex → RIP-Bay-D.
+console.log('Seeding NeoStampa sync agents + hot folders...');
+const insAgent = db.prepare(`
+  INSERT INTO neostampa_agents (name, hostname, version, status, last_heartbeat_at,
+    uptime_seconds, jobs_processed_today, jobs_failed_today, neostampa_version, notes)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`);
+const agentSpecs = [
+  { name: 'RIP-Bay-A', hostname: 'rip-bay-a.adt.local', status: 'online',  ns: 'NeoStampa 11.2', notes: 'Durst Alpha — Pigment' },
+  { name: 'RIP-Bay-B', hostname: 'rip-bay-b.adt.local', status: 'online',  ns: 'NeoStampa 11.2', notes: 'MS JP7 — Fiber Reactive' },
+  { name: 'RIP-Bay-C', hostname: 'rip-bay-c.adt.local', status: 'degraded', ns: 'NeoStampa 11.1', notes: 'JP4-A/B Dye Sub — needs NeoStampa upgrade' },
+  { name: 'RIP-Bay-D', hostname: 'rip-bay-d.adt.local', status: 'online',  ns: 'NeoStampa 11.2', notes: 'Zimmer + HP Latex' },
+];
+const agentIds: Record<string, number> = {};
+agentSpecs.forEach((a) => {
+  const r = insAgent.run(
+    a.name, a.hostname, '1.0.2', a.status,
+    a.status === 'online' ? faker.date.recent({ days: 0.01 }).toISOString() : faker.date.recent({ days: 0.5 }).toISOString(),
+    faker.number.int({ min: 100000, max: 5000000 }),
+    faker.number.int({ min: 10, max: 80 }),
+    a.status === 'degraded' ? faker.number.int({ min: 3, max: 12 }) : faker.number.int({ min: 0, max: 4 }),
+    a.ns, a.notes,
+  );
+  agentIds[a.name] = r.lastInsertRowid as number;
+});
+
+console.log('Seeding hot folders (one per printer + 1 rush lane)...');
+const printersAll = db.prepare(`SELECT id, name FROM printers`).all() as { id: number; name: string }[];
+const insHotFolder = db.prepare(`
+  INSERT INTO hot_folders (printer_id, name, unc_path, is_active, neostampa_agent_id, is_rush_lane)
+  VALUES (?, ?, ?, ?, ?, ?)
+`);
+const printerAgentMap: Record<string, string> = {
+  'Durst Alpha 330': 'RIP-Bay-A',
+  'MS JP7': 'RIP-Bay-B',
+  'MS JP4-A': 'RIP-Bay-C',
+  'MS JP4-B': 'RIP-Bay-C',
+  'Zimmer Colaris': 'RIP-Bay-D',
+  'HP Latex 800W': 'RIP-Bay-D',
+  'HP Latex 830W': 'RIP-Bay-D',
+};
+const hotFolderByPrinterId: Record<number, number> = {};
+printersAll.forEach((p) => {
+  const agentName = printerAgentMap[p.name] ?? 'RIP-Bay-A';
+  const slug = p.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const r = insHotFolder.run(
+    p.id, `${p.name} — STANDARD`,
+    `\\\\${agentName.toLowerCase()}\\hotfolder\\${slug}\\standard\\`,
+    1, agentIds[agentName], 0,
+  );
+  hotFolderByPrinterId[p.id] = r.lastInsertRowid as number;
+});
+// One rush lane on Durst (heaviest used)
+const durst = printersAll.find((p) => p.name === 'Durst Alpha 330');
+if (durst) {
+  insHotFolder.run(
+    durst.id, 'Durst Alpha 330 — RUSH',
+    `\\\\rip-bay-a\\hotfolder\\durst-alpha-330\\rush\\`,
+    1, agentIds['RIP-Bay-A'], 1,
+  );
+}
+
+// ============================================================
+// FabricOutputs + RipJobs + events per PR
+// ============================================================
+console.log('Seeding fabric outputs + RIP jobs + events for in-flight PRs...');
+const insFO = db.prepare(`
+  INSERT INTO fabric_outputs (qr_payload, print_request_id, generated_at, yards_produced, status)
+  VALUES (?, ?, ?, ?, ?)
+`);
+const insRipJob = db.prepare(`
+  INSERT INTO rip_jobs (print_request_id, fabric_output_id, external_job_name, status,
+    hot_folder_id, neostampa_agent_id, package_path, retry_count, is_held, hold_reason, error_message,
+    submitted_at, accepted_at, rip_started_at, rip_completed_at,
+    print_started_at, print_completed_software_at, print_completed_qr_at, created_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`);
+const insRipEvent = db.prepare(`
+  INSERT INTO rip_job_events (rip_job_id, event_type, event_at, source, user_id, details)
+  VALUES (?, ?, ?, ?, ?, ?)
+`);
+const updPRRip = db.prepare(`
+  UPDATE print_requests
+  SET external_job_name = ?, fabric_output_id = ?, current_rip_job_id = ?, rip_status = ?,
+      rip_retry_count = ?, rip_last_event_at = ?
+  WHERE id = ?
+`);
+
+// Pull every PR with the bits we need for the external job name
+const prsForRip = db.prepare(`
+  SELECT pr.id as pr_id, pr.pr_number, pr.status as pr_status, pr.printer_id, pr.planned_yardage,
+         pr.printed_yardage, pr.created_at,
+         d.name as design_name, cw.name as colorway_name,
+         c.name as company_name
+  FROM print_requests pr
+  JOIN order_lines ol ON pr.order_line_id = ol.id
+  JOIN orders o ON ol.order_id = o.id
+  JOIN companies c ON o.company_id = c.id
+  LEFT JOIN designs d ON ol.design_id = d.id
+  LEFT JOIN colorways cw ON ol.colorway_id = cw.id
+`).all() as any[];
+
+let foCounter = 90000;
+let ripJobsCreated = 0;
+let ripEventsCreated = 0;
+prsForRip.forEach((pr) => {
+  // Build external job name: CUSTOMER_PR-#_FO-#_DESIGN_COLORWAY_yyYD
+  const customer = (pr.company_name ?? 'UNKNOWN')
+    .toUpperCase()
+    .replace(/&/g, 'AND').replace(/[^A-Z0-9]+/g, '');
+  const design = (pr.design_name ?? 'UNKNOWN')
+    .toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const colorway = (pr.colorway_name ?? 'DEFAULT')
+    .toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const yards = Math.round(pr.planned_yardage ?? 0);
+  const foId = foCounter++;
+  const externalJobName = `${customer}_PR-${pr.pr_id}_FO-${foId}_${design}_${colorway}_${yards}YD`;
+
+  // FabricOutput status maps from PR status
+  const foStatus =
+    ['Complete'].includes(pr.pr_status) ? 'bundled'
+    : ['Printed'].includes(pr.pr_status) ? 'finishing'
+    : ['Printing'].includes(pr.pr_status) ? 'printed'
+    : 'pending_print';
+
+  const foResult = insFO.run(
+    `FO-${foId}`, pr.pr_id,
+    faker.date.recent({ days: 5 }).toISOString(),
+    pr.printed_yardage,
+    foStatus,
+  );
+  const foRowId = foResult.lastInsertRowid as number;
+
+  // Decide RIP job status from PR status + a bit of variance
+  // PR Draft / Pending Internal Proof / Ready for Scheduling = no RIP job yet
+  if (['Draft', 'Pending Internal Proof'].includes(pr.pr_status)) {
+    updPRRip.run(externalJobName, foRowId, null, 'not_started', 0, null, pr.pr_id);
+    return;
+  }
+  // PR Ready for Scheduling = ready_for_rip
+  // Scheduled = package_created / submitted / accepted / ripping
+  // Printing = queued_for_print / printing
+  // Printed = print_complete_software (waiting for QR confirm)
+  // Complete = print_complete_qr
+  const baseStatus =
+    pr.pr_status === 'Ready for Scheduling' ? 'ready_for_rip'
+    : pr.pr_status === 'Scheduled' ? faker.helpers.arrayElement(['package_created', 'submitted', 'accepted', 'ripping', 'rip_complete', 'queued_for_print'])
+    : pr.pr_status === 'Printing' ? 'printing'
+    : pr.pr_status === 'Printed' ? 'print_complete_software'
+    : pr.pr_status === 'Complete' ? 'print_complete_qr'
+    : 'ready_for_rip';
+
+  // Apply ~7% failure / ~3% held overrides
+  const roll = faker.number.int({ min: 1, max: 100 });
+  const ripStatus = roll <= 7 ? 'error' : roll <= 10 ? 'held' : baseStatus;
+  const retryCount = ripStatus === 'error' ? faker.number.int({ min: 0, max: 3 }) : 0;
+  const isHeld = ripStatus === 'held' ? 1 : 0;
+  const holdReason = isHeld
+    ? faker.helpers.arrayElement(['Megan approval pending', 'RIP profile review', 'Awaiting customer color approval', 'Inventory shortage'])
+    : null;
+  const errorMessage = ripStatus === 'error'
+    ? faker.helpers.arrayElement([
+        'Hot folder unreachable — \\\\rip-bay-c\\hotfolder unreachable',
+        'NeoStampa rejected job: missing ICC profile',
+        'Package generation failed — composite TIFF size exceeded 4GB',
+        'NeoStampa agent stopped responding mid-RIP',
+        'Duplicate external job name detected',
+      ])
+    : null;
+
+  // Timestamps cascade by status
+  const baseDate = new Date(pr.created_at).getTime();
+  const day = 24 * 3600 * 1000;
+  const stepMs = (h: number) => h * 3600 * 1000;
+  const submittedAt   = baseDate + faker.number.int({ min: stepMs(0.5), max: stepMs(3) });
+  const acceptedAt    = submittedAt + stepMs(faker.number.int({ min: 1, max: 8 }) / 12);  // few minutes
+  const ripStartedAt  = acceptedAt + stepMs(0.05);
+  const ripCompletedAt = ripStartedAt + stepMs(faker.number.int({ min: 5, max: 40 }) / 60); // 5-40 min
+  const printStartedAt = ripCompletedAt + stepMs(faker.number.int({ min: 1, max: 6 }));
+  const printSoftwareAt = printStartedAt + stepMs(faker.number.int({ min: 1, max: 5 }));
+  const printQrAt = printSoftwareAt + stepMs(faker.number.int({ min: 0.1, max: 2 }) * 10) / 10;
+
+  const reached = (s: string) => {
+    const order = ['ready_for_rip','package_created','submitted','accepted','ripping','rip_complete','queued_for_print','printing','print_complete_software','print_complete_qr'];
+    return order.indexOf(ripStatus) >= order.indexOf(s);
+  };
+  const tsOrNull = (ms: number, gateStatus: string) => reached(gateStatus) ? new Date(ms).toISOString() : null;
+
+  // Pick hot folder + agent
+  const hotFolderId = hotFolderByPrinterId[pr.printer_id] ?? null;
+  const agentName = printerAgentMap[(printersAll.find((p) => p.id === pr.printer_id)?.name ?? '')] ?? 'RIP-Bay-A';
+  const agentId = agentIds[agentName];
+  const packagePath = `\\\\nas\\packages\\${externalJobName.toLowerCase()}.prn`;
+
+  const ripJobResult = insRipJob.run(
+    pr.pr_id, foRowId, externalJobName, ripStatus,
+    hotFolderId, agentId, packagePath, retryCount, isHeld, holdReason, errorMessage,
+    tsOrNull(submittedAt, 'submitted'),
+    tsOrNull(acceptedAt, 'accepted'),
+    tsOrNull(ripStartedAt, 'ripping'),
+    tsOrNull(ripCompletedAt, 'rip_complete'),
+    tsOrNull(printStartedAt, 'printing'),
+    tsOrNull(printSoftwareAt, 'print_complete_software'),
+    tsOrNull(printQrAt, 'print_complete_qr'),
+    new Date(baseDate).toISOString(),
+  );
+  const ripJobId = ripJobResult.lastInsertRowid as number;
+  ripJobsCreated++;
+
+  // Event log — write a row for each transition the job actually went through
+  const evt = (type: string, at: number | null, source = 'agent', details: string | null = null) => {
+    if (at === null) return;
+    insRipEvent.run(ripJobId, type, new Date(at).toISOString(), source, null, details);
+    ripEventsCreated++;
+  };
+  evt('package_created', baseDate + stepMs(0.3), 'system');
+  evt('submitted', reached('submitted') ? submittedAt : null);
+  evt('accepted', reached('accepted') ? acceptedAt : null);
+  evt('rip_started', reached('ripping') ? ripStartedAt : null);
+  evt('rip_completed', reached('rip_complete') ? ripCompletedAt : null);
+  evt('print_started', reached('printing') ? printStartedAt : null);
+  evt('print_completed_software', reached('print_complete_software') ? printSoftwareAt : null);
+  evt('print_completed_qr', reached('print_complete_qr') ? printQrAt : null, 'agent', 'Confirmed via QR scan at printer exit');
+  if (ripStatus === 'error') {
+    evt('error', baseDate + stepMs(faker.number.int({ min: 2, max: 24 })), 'agent', errorMessage);
+    for (let r = 0; r < retryCount; r++) {
+      evt('retried', baseDate + stepMs(faker.number.int({ min: 24, max: 48 }) * (r + 1)), 'manual', `Retry ${r + 1}`);
+    }
+  }
+  if (ripStatus === 'held') {
+    evt('held', baseDate + stepMs(faker.number.int({ min: 1, max: 6 })), 'manual', holdReason);
+  }
+
+  // Update PR with derived RIP state
+  updPRRip.run(
+    externalJobName, foRowId, ripJobId, ripStatus, retryCount,
+    new Date(baseDate + stepMs(faker.number.int({ min: 1, max: 12 }))).toISOString(),
+    pr.pr_id,
+  );
+});
+console.log(`  RIP jobs: ${ripJobsCreated}, events: ${ripEventsCreated}`);
+
 console.log('Seeding notifications (recent in-app for active roles)...');
 const insNote = db.prepare(`
   INSERT INTO notifications (notification_code, recipient_user_id, recipient_role, channel, subject, body, related_entity_type, related_entity_id, is_read, created_at)

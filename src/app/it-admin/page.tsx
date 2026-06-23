@@ -1,5 +1,7 @@
 import Link from 'next/link';
+import { getDb } from '@/lib/db';
 import { Card, CardHeader, Tag, Button, StatusPill } from '@/components/ui';
+import { relativeTime } from '@/lib/utils';
 import {
   CheckCircle2, AlertTriangle, XCircle, RotateCw, Search, UserPlus, UserMinus,
   Activity, KeyRound, ExternalLink, Plug,
@@ -251,6 +253,10 @@ export default function ITAdminHome() {
         </Card>
       </div>
 
+      {/* NeoStampa Sync Agents — Phase 1 surface
+          One agent per RIP machine. Each watches hot folders + reports back. */}
+      <NeoStampaAgentsPanel />
+
       {/* User Provisioning + Audit Search */}
       <div className="grid grid-cols-3 gap-5">
         <Card>
@@ -345,6 +351,72 @@ function Stat({ label, value, accent, icon }: { label: string; value: any; accen
           <div className="text-2xl font-bold text-navy-900 leading-tight">{value}</div>
           <div className="text-[11px] text-gray-500 uppercase tracking-wider mt-0.5 flex items-center gap-1">{icon}{label}</div>
         </div>
+      </div>
+    </Card>
+  );
+}
+
+// NeoStampa Sync Agents — Phase 1 add. Pulls live state from neostampa_agents table.
+function NeoStampaAgentsPanel() {
+  const db = getDb();
+  const agents = db.prepare(`
+    SELECT a.*,
+      (SELECT COUNT(*) FROM hot_folders hf WHERE hf.neostampa_agent_id = a.id AND hf.is_active = 1) as folder_count,
+      (SELECT COUNT(*) FROM rip_jobs rj WHERE rj.neostampa_agent_id = a.id AND rj.status = 'error') as open_errors
+    FROM neostampa_agents a ORDER BY a.name
+  `).all() as any[];
+
+  return (
+    <Card>
+      <CardHeader
+        title="NeoStampa Sync Agents"
+        subtitle="Local services on each RIP machine — watch hot folders, monitor logs, report events back to Helm. Heartbeat every 30s."
+        action={<Tag color={agents.some((a) => a.status !== 'online') ? 'yellow' : 'green'}>{agents.filter((a) => a.status === 'online').length}/{agents.length} online</Tag>}
+      />
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
+            <tr>
+              <th className="text-left px-4 py-2.5">Agent</th>
+              <th className="text-left px-4 py-2.5">Host</th>
+              <th className="text-left px-4 py-2.5">Status</th>
+              <th className="text-left px-4 py-2.5">NeoStampa</th>
+              <th className="text-left px-4 py-2.5">Hot Folders</th>
+              <th className="text-left px-4 py-2.5">Last Heartbeat</th>
+              <th className="text-left px-4 py-2.5">Jobs Today</th>
+              <th className="text-left px-4 py-2.5">Failed Today</th>
+              <th className="text-left px-4 py-2.5">Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {agents.map((a) => (
+              <tr key={a.id} className="border-t border-gray-100 hover:bg-gray-50">
+                <td className="px-4 py-2.5 font-semibold text-navy-900">{a.name}</td>
+                <td className="px-4 py-2.5 font-mono text-[10px] text-gray-500">{a.hostname}</td>
+                <td className="px-4 py-2.5">
+                  <Tag color={a.status === 'online' ? 'green' : a.status === 'degraded' ? 'yellow' : a.status === 'offline' ? 'red' : 'gray'}>
+                    {a.status}
+                  </Tag>
+                  {a.open_errors > 0 && <Tag color="red">{a.open_errors} err</Tag>}
+                </td>
+                <td className="px-4 py-2.5 text-xs">{a.neostampa_version ?? '—'}</td>
+                <td className="px-4 py-2.5 font-mono text-xs">{a.folder_count}</td>
+                <td className="px-4 py-2.5 text-xs text-gray-500">{a.last_heartbeat_at ? relativeTime(a.last_heartbeat_at) : '—'}</td>
+                <td className="px-4 py-2.5 font-mono text-xs">{a.jobs_processed_today}</td>
+                <td className="px-4 py-2.5 font-mono text-xs">
+                  {a.jobs_failed_today > 0
+                    ? <span className="text-helm-red font-bold">{a.jobs_failed_today}</span>
+                    : <span className="text-gray-400">0</span>}
+                </td>
+                <td className="px-4 py-2.5 text-[11px] text-gray-600 italic max-w-xs">{a.notes ?? ''}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="px-4 py-2 border-t border-gray-100 text-[11px] text-gray-500 italic">
+        Agent code packaged as a Windows service. Sends event POSTs to Helm’s /api/rip-events endpoint.
+        Future requirements for full Inèdit integration: API access, log file access, queue access, folder monitoring, job metadata, printer status, meter tracking, ink usage, archive status.
       </div>
     </Card>
   );

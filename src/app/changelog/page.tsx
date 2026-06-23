@@ -12,6 +12,21 @@ type Entry = {
 
 const ENTRIES: Entry[] = [
   {
+    date: '2026-06-22',
+    version: '0.5',
+    title: 'NeoStampa Sync — Phase 1 foundation',
+    bullets: [
+      'New entities: rip_jobs, rip_job_events, hot_folders, neostampa_agents, fabric_outputs — wraps the existing composite step into a full 12-state RIP lifecycle.',
+      'External job name pattern threaded through every PR: CUSTOMER_PR-#_FO-#_DESIGN_COLORWAY_yyYD.',
+      'PR Detail: new RIP · NeoStampa Activity card with status pill, agent, hot folder, FabricOutput QR, retry count, and an event timeline. Subsumes the standalone Composite card.',
+      'Printer Queue: new "RIP · NeoStampa Activity" section listing all active RipJobs with external job name, agent + heartbeat, retries, QR-confirmed flag, per-row Submit/Retry/Release actions.',
+      'Intake Command Center: new Auto-RIP Engine panel with 6 counters (Ready / In flight / Awaiting QR / QR confirmed / Errors / Held) + recent jobs table.',
+      'IT / System Admin: new NeoStampa Sync Agents panel — 4 agents (RIP-Bay-A/B/C/D), heartbeats, jobs processed/failed today, NeoStampa version, notes.',
+      '5 new exception types: NeoStampa Agent Offline, Hot Folder Unreachable, Duplicate External Job Name, RIP Failure, QR Confirmation Missing.',
+      'Seed: 7 hot folders (one per printer + 1 rush lane on Durst), 4 agents, RipJobs distributed across all 12 statuses with realistic ~7% error + ~3% held rate.',
+    ],
+  },
+  {
     date: '2026-06-21',
     version: '0.4',
     title: 'Prototype navigation upgrades + Receive Fabric form',

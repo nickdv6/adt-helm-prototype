@@ -396,6 +396,11 @@ export default function IntakeCommandCenter() {
         </div>
       </Card>
 
+      {/* Auto-RIP Engine — NeoStampa Phase 1
+          The Compositing Engine above produces a package; the Auto-RIP Engine submits it
+          to NeoStampa, watches the hot folder, and tracks RIP lifecycle through to print + QR confirm. */}
+      <AutoRipEngine />
+
       {/* Scan Event Engine */}
       <Card>
         <CardHeader
@@ -554,5 +559,110 @@ function CrossLink({ href, icon, title, subtitle }: { href: string; icon: React.
         </div>
       </Card>
     </Link>
+  );
+}
+
+// Auto-RIP Engine — pulls live state from rip_jobs and rip_job_events to show
+// the current automation pipeline: how many packages are ready, in flight,
+// failed, held. Server-side functional component (no client state).
+function AutoRipEngine() {
+  const db = getDb();
+  const counts = db.prepare(`
+    SELECT
+      SUM(CASE WHEN status = 'ready_for_rip' THEN 1 ELSE 0 END) as ready,
+      SUM(CASE WHEN status IN ('package_created','submitted','accepted','ripping','rip_complete','queued_for_print','printing') THEN 1 ELSE 0 END) as in_flight,
+      SUM(CASE WHEN status = 'print_complete_software' THEN 1 ELSE 0 END) as awaiting_qr,
+      SUM(CASE WHEN status = 'print_complete_qr' THEN 1 ELSE 0 END) as complete_qr,
+      SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) as errors,
+      SUM(CASE WHEN is_held = 1 THEN 1 ELSE 0 END) as held
+    FROM rip_jobs
+  `).get() as any;
+
+  const recent = db.prepare(`
+    SELECT rj.id, rj.external_job_name, rj.status, rj.retry_count, rj.is_held,
+           rj.error_message, rj.created_at,
+           pr.pr_number, pr.id as pr_id,
+           p.name as printer_name,
+           a.name as agent_name, a.status as agent_status
+    FROM rip_jobs rj
+    JOIN print_requests pr ON rj.print_request_id = pr.id
+    LEFT JOIN printers p ON pr.printer_id = p.id
+    LEFT JOIN neostampa_agents a ON rj.neostampa_agent_id = a.id
+    ORDER BY rj.id DESC LIMIT 12
+  `).all() as any[];
+
+  return (
+    <Card>
+      <CardHeader
+        title="Auto-RIP Engine · NeoStampa Lifecycle"
+        subtitle="Composite → Submit → Accept → RIP → Print → QR-confirm. Software status here · QR scan = ground truth."
+        action={
+          <div className="flex gap-2">
+            <Button size="sm" variant="secondary">Submit Ready</Button>
+            <Button size="sm" variant="secondary">Retry Failed</Button>
+          </div>
+        }
+      />
+      <div className="grid grid-cols-6 gap-3 px-5 py-4 border-b border-gray-100">
+        <Mini label="Ready" value={counts?.ready ?? 0} />
+        <Mini label="In flight" value={counts?.in_flight ?? 0} color="text-navy-700" />
+        <Mini label="Awaiting QR" value={counts?.awaiting_qr ?? 0} color="text-yellow-700" />
+        <Mini label="QR confirmed" value={counts?.complete_qr ?? 0} color="text-green-700" />
+        <Mini label="Errors" value={counts?.errors ?? 0} color={counts?.errors > 0 ? 'text-helm-red' : 'text-gray-400'} />
+        <Mini label="Held" value={counts?.held ?? 0} color={counts?.held > 0 ? 'text-yellow-700' : 'text-gray-400'} />
+      </div>
+      <table className="w-full text-sm">
+        <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
+          <tr>
+            <th className="text-left px-4 py-2.5">PR</th>
+            <th className="text-left px-4 py-2.5">External Job Name</th>
+            <th className="text-left px-4 py-2.5">Printer</th>
+            <th className="text-left px-4 py-2.5">Agent</th>
+            <th className="text-left px-4 py-2.5">Status</th>
+            <th className="text-left px-4 py-2.5">Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          {recent.map((j) => {
+            const isErr = j.status === 'error';
+            const isHeld = j.is_held === 1;
+            const statusColor: Record<string, 'gray' | 'blue' | 'yellow' | 'green' | 'red' | 'purple'> = {
+              ready_for_rip: 'gray', package_created: 'blue', submitted: 'blue', accepted: 'blue',
+              ripping: 'blue', rip_complete: 'blue', queued_for_print: 'purple', printing: 'purple',
+              print_complete_software: 'yellow', print_complete_qr: 'green', error: 'red', held: 'yellow',
+            };
+            return (
+              <tr key={j.id} className={`border-t border-gray-100 ${isErr ? 'bg-red-50/30' : isHeld ? 'bg-yellow-50/30' : ''}`}>
+                <td className="px-4 py-2 font-mono text-xs">
+                  <Link href={`/print-requests/${j.pr_id}`} className="text-navy-700 hover:underline">{j.pr_number}</Link>
+                </td>
+                <td className="px-4 py-2 font-mono text-[10px] text-gray-600 break-all max-w-xs">{j.external_job_name}</td>
+                <td className="px-4 py-2 text-xs">{j.printer_name ?? '—'}</td>
+                <td className="px-4 py-2 text-xs">
+                  {j.agent_name ?? '—'}{j.agent_status === 'degraded' && <span className="text-yellow-700 ml-1">!</span>}
+                </td>
+                <td className="px-4 py-2"><Tag color={statusColor[j.status] ?? 'gray'}>{j.status.replace(/_/g, ' ')}</Tag></td>
+                <td className="px-4 py-2 text-[11px] text-gray-600 italic">
+                  {j.retry_count > 0 && <span className="text-yellow-700">retried × {j.retry_count} </span>}
+                  {j.error_message ?? ''}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className="px-4 py-2 border-t border-gray-100 text-[11px] text-gray-500 italic">
+        Agents run on RIP machines as the NeoStampa Sync service. See <Link href="/it-admin" className="text-navy-700 hover:underline">IT / System Admin</Link> for agent heartbeats + offline alerts.
+      </div>
+    </Card>
+  );
+}
+
+function Mini({ label, value, color = 'text-navy-900' }: { label: string; value: any; color?: string }) {
+  return (
+    <div className="border border-gray-100 rounded p-2 text-center">
+      <div className={`text-xl font-bold ${color}`}>{value}</div>
+      <div className="text-[10px] uppercase tracking-wider text-gray-500 mt-0.5">{label}</div>
+    </div>
   );
 }

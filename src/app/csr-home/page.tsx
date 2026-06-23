@@ -34,7 +34,7 @@ export default function CSRHome() {
   `).get() as any;
   // Exception Center uses mock data (no exceptions table in schema yet);
   // matches the 6-entry sidebar badge + EX-24xx mock array on /exceptions.
-  const openExceptions = { n: 6 };
+  const openExceptions = { n: 11 };
 
   return (
     <RoleHomeShell

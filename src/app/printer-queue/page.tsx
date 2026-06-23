@@ -280,6 +280,111 @@ export default function PrinterQueue() {
         </div>
       </Card>
 
+      {/* RIP · NeoStampa Activity — added Phase 1 of NeoStampa Sync.
+          Shows all active RipJobs with external job name, RIP status, agent, retry,
+          and per-row submit/retry/hold/view-log actions. */}
+      <Card>
+        <CardHeader
+          title="RIP · NeoStampa Activity"
+          subtitle="Active jobs across all printers — external job names, RIP states, agent assignment, retries. Truth: software status here, QR scan truth in fabric outputs."
+          action={
+            <div className="flex gap-2">
+              <Button size="sm" variant="secondary">Submit Ready</Button>
+              <Button size="sm" variant="secondary">Retry Failed</Button>
+            </div>
+          }
+        />
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
+              <tr>
+                <th className="text-left px-4 py-2.5">PR #</th>
+                <th className="text-left px-4 py-2.5">External Job Name</th>
+                <th className="text-left px-4 py-2.5">Printer · Hot Folder</th>
+                <th className="text-left px-4 py-2.5">Agent</th>
+                <th className="text-left px-4 py-2.5">RIP Status</th>
+                <th className="text-left px-4 py-2.5">Retries</th>
+                <th className="text-left px-4 py-2.5">QR ✓</th>
+                <th className="text-left px-4 py-2.5">Last Event</th>
+                <th className="text-right px-4 py-2.5 pr-5">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(db.prepare(`
+                SELECT rj.id, rj.external_job_name, rj.status, rj.retry_count, rj.is_held,
+                       rj.print_completed_qr_at, rj.error_message,
+                       pr.id as pr_id, pr.pr_number, pr.rip_last_event_at,
+                       p.name as printer_name,
+                       hf.name as hot_folder_name,
+                       a.name as agent_name, a.status as agent_status
+                FROM rip_jobs rj
+                JOIN print_requests pr ON rj.print_request_id = pr.id
+                LEFT JOIN printers p ON pr.printer_id = p.id
+                LEFT JOIN hot_folders hf ON rj.hot_folder_id = hf.id
+                LEFT JOIN neostampa_agents a ON rj.neostampa_agent_id = a.id
+                WHERE rj.status NOT IN ('print_complete_qr')
+                  AND pr.status NOT IN ('Cancelled')
+                ORDER BY
+                  CASE rj.status WHEN 'error' THEN 0 WHEN 'held' THEN 1 ELSE 2 END,
+                  rj.id DESC
+                LIMIT 40
+              `).all() as any[]).map((j) => {
+                const statusMap: Record<string, { color: 'gray' | 'blue' | 'yellow' | 'green' | 'red' | 'purple'; label: string }> = {
+                  ready_for_rip:             { color: 'gray',   label: 'Ready for RIP' },
+                  package_created:           { color: 'blue',   label: 'Pkg created' },
+                  submitted:                 { color: 'blue',   label: 'Submitted' },
+                  accepted:                  { color: 'blue',   label: 'Accepted' },
+                  ripping:                   { color: 'blue',   label: 'RIP in progress' },
+                  rip_complete:              { color: 'blue',   label: 'RIP complete' },
+                  queued_for_print:          { color: 'purple', label: 'Queued' },
+                  printing:                  { color: 'purple', label: 'Printing' },
+                  print_complete_software:   { color: 'yellow', label: 'Print · sw only' },
+                  print_complete_qr:         { color: 'green',  label: 'Print · QR ✓' },
+                  error:                     { color: 'red',    label: 'Error' },
+                  held:                      { color: 'yellow', label: 'Held' },
+                };
+                const s = statusMap[j.status] ?? { color: 'gray' as const, label: j.status };
+                return (
+                  <tr key={j.id} className={`border-t border-gray-100 hover:bg-gray-50 ${j.status === 'error' ? 'bg-red-50/40' : j.is_held ? 'bg-yellow-50/40' : ''}`}>
+                    <td className="px-4 py-2 font-mono text-xs">
+                      <Link href={`/print-requests/${j.pr_id}`} className="text-navy-700 font-semibold hover:underline">{j.pr_number}</Link>
+                    </td>
+                    <td className="px-4 py-2 font-mono text-[10px] text-gray-600 break-all max-w-xs">{j.external_job_name}</td>
+                    <td className="px-4 py-2 text-xs">
+                      <div className="font-semibold">{j.printer_name ?? '—'}</div>
+                      <div className="text-gray-500 text-[10px]">{j.hot_folder_name ?? '—'}</div>
+                    </td>
+                    <td className="px-4 py-2 text-xs">
+                      <div className="flex items-center gap-1">
+                        <span>{j.agent_name ?? '—'}</span>
+                        {j.agent_status === 'degraded' && <Tag color="yellow">!</Tag>}
+                        {j.agent_status === 'offline' && <Tag color="red">!</Tag>}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2"><Tag color={s.color}>{s.label}</Tag></td>
+                    <td className="px-4 py-2 font-mono text-xs">{j.retry_count}</td>
+                    <td className="px-4 py-2 text-xs">
+                      {j.print_completed_qr_at ? <Tag color="green">✓</Tag> : <span className="text-gray-300">—</span>}
+                    </td>
+                    <td className="px-4 py-2 text-[11px] text-gray-500">
+                      {j.rip_last_event_at ? relativeTime(j.rip_last_event_at) : '—'}
+                    </td>
+                    <td className="px-4 py-2 text-right pr-5">
+                      <div className="flex gap-1 justify-end">
+                        {j.status === 'error' && <Button size="sm" variant="secondary">Retry</Button>}
+                        {j.status === 'ready_for_rip' && <Button size="sm">Submit</Button>}
+                        {j.is_held && <Button size="sm" variant="secondary">Release</Button>}
+                        <Link href={`/print-requests/${j.pr_id}`} className="text-[10px] text-gray-500 hover:text-navy-700 hover:underline px-2 py-1">Log →</Link>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
       {/* Unassigned queue — same data as above, grouped by fabric so the flat list tells the batching story too */}
       <Card>
         <CardHeader
