@@ -425,6 +425,93 @@ function NeoStampaAgentsPanel() {
           Notifications §Notifications (p.85) · CGI flags §neoRipEngineCGI (p.109). Job export uses the <code className="font-mono">.xjb</code> bundle format via <code className="font-mono">-exportjob</code>.
         </div>
       </div>
+
+      {/* Webhook API contract — what the Sync Agent POSTs back */}
+      <div className="border-t border-gray-200">
+        <CardHeader title="Webhook API · /api/rip-events" subtitle="Endpoint NeoStampa Sync Agents call when print events fire — live in this prototype." />
+        <div className="p-5 space-y-3 text-sm">
+          <div className="grid grid-cols-3 gap-3 text-xs">
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">Method · Path</div>
+              <code className="font-mono text-navy-700 break-all">GET/POST /api/rip-events</code>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">Required params</div>
+              <code className="font-mono">event</code>, <code className="font-mono">job</code>
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">Optional</div>
+              <code className="font-mono">pr</code>, <code className="font-mono">agent</code>, <code className="font-mono">qr_payload</code>, <code className="font-mono">details</code>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">Inèdit Notification URL example (GET)</div>
+            <pre className="font-mono text-[10px] bg-gray-50 border border-gray-200 rounded p-2 overflow-x-auto whitespace-pre-wrap break-all">
+{`GET https://helm.adt.com/api/rip-events
+    ?event=print_started
+    &job=STFRANK_PR-104582_FO-98321_BLOOM-BLUE_12YD
+    &pr=PR-104582
+    &agent=RIP-Bay-A`}
+            </pre>
+          </div>
+
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">Agent QR-scan event (POST)</div>
+            <pre className="font-mono text-[10px] bg-gray-50 border border-gray-200 rounded p-2 overflow-x-auto whitespace-pre">
+{`POST https://helm.adt.com/api/rip-events
+Content-Type: application/json
+
+{
+  "event": "print_completed_qr",
+  "job": "STFRANK_PR-104582_FO-98321_BLOOM-BLUE_12YD",
+  "pr": "PR-104582",
+  "agent": "RIP-Bay-A",
+  "qr_payload": "FO-98321",
+  "details": "Scanned at Durst Alpha 330 exit · operator JV"
+}`}
+            </pre>
+          </div>
+
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">Success response (200)</div>
+            <pre className="font-mono text-[10px] bg-gray-50 border border-gray-200 rounded p-2 overflow-x-auto whitespace-pre">
+{`{
+  "ok": true,
+  "event_id": "evt_…",
+  "rip_job_id": 123,
+  "pr_number": "PR-104582",
+  "external_job_name": "STFRANK_PR-104582_…",
+  "previous_status": "printing",
+  "new_status": "print_complete_qr",
+  "status_changed": true,
+  "would_persist": { "insert_into": "rip_job_events", … }
+}`}
+            </pre>
+          </div>
+
+          <div className="flex gap-2 flex-wrap text-[10px]">
+            <Tag color="gray">200 ok — event accepted</Tag>
+            <Tag color="yellow">400 — missing/invalid params or PR mismatch</Tag>
+            <Tag color="red">404 orphaned_event — raises EX-RIP-ORPHANED</Tag>
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <a href="/api/rip-events" target="_blank" rel="noreferrer"
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-navy-700 bg-white border border-gray-300 hover:bg-gray-50 rounded">
+              <ExternalLink className="w-3.5 h-3.5" />View live JSON contract docs
+            </a>
+            <a href="/api/rip-events?event=print_started&job=STFRANK_PR-4506_FO-90001_DESIGN_COLORWAY_12YD&pr=PR-4506&agent=RIP-Bay-A" target="_blank" rel="noreferrer"
+              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-navy-700 bg-white border border-gray-300 hover:bg-gray-50 rounded">
+              <ExternalLink className="w-3.5 h-3.5" />Test orphaned-event 404
+            </a>
+          </div>
+
+          <div className="text-[10px] text-gray-500 italic pt-1 border-t border-gray-100">
+            Prototype mock: endpoint validates + looks up the RipJob + returns the would-be write. Vercel filesystem is read-only at runtime so writes aren't persisted across requests; production (Postgres) executes the INSERT + UPDATE. Identity binding: <code className="font-mono">rip_jobs.external_job_name</code> is UNIQUE — duplicate name = DB-level collision, not just an exception.
+          </div>
+        </div>
+      </div>
     </Card>
   );
 }

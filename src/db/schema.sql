@@ -469,7 +469,7 @@ CREATE TABLE IF NOT EXISTS rip_jobs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   print_request_id INTEGER NOT NULL,
   fabric_output_id INTEGER,
-  external_job_name TEXT NOT NULL,                   -- CUSTOMER_PR-#_FO-#_DESIGN_COLORWAY_yyYD
+  external_job_name TEXT NOT NULL UNIQUE,            -- CUSTOMER_PR-#_FO-#_DESIGN_COLORWAY_yyYD · UNIQUE prevents NeoStampa name collisions; reprints append _R2/_R3 suffix
   status TEXT NOT NULL DEFAULT 'ready_for_rip',      -- 12-state flow
   hot_folder_id INTEGER,
   neostampa_agent_id INTEGER,

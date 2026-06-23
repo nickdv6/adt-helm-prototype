@@ -13,6 +13,20 @@ type Entry = {
 const ENTRIES: Entry[] = [
   {
     date: '2026-06-23',
+    version: '0.7',
+    title: 'RIP event identity binding — UNIQUE constraint + live /api/rip-events webhook',
+    bullets: [
+      'rip_jobs.external_job_name now has a UNIQUE constraint — duplicate NeoStampa job names are blocked at the DB layer, not just by exception EX-2424.',
+      'New live endpoint: GET/POST /api/rip-events — the webhook NeoStampa Sync Agents call when print events fire. Supports both shapes: Inèdit-style GET with query params (per spec p.85 Notification URL format) and modern POST with JSON body.',
+      'Endpoint validates input, looks up the RipJob by external_job_name, and returns the would-be write (insert into rip_job_events + update rip_jobs.status). On Vercel the SQLite filesystem is read-only at runtime so writes are mocked; production (Postgres) executes the persist.',
+      'Orphaned-event handling: if no RipJob exists with the given external_job_name → 400 / EX-RIP-ORPHANED raised. Includes possible-causes hints for the operator.',
+      'PR-mismatch detection: if the request carries a pr param that doesn\'t match the external_job_name resolution → 400 with the mismatch detail (catches agent-side bugs).',
+      'IT/Admin: new Webhook API contract card under the NeoStampa Sync Agents panel — endpoint URL, sample Inèdit GET + agent POST, success response shape, status codes, live links to the JSON contract docs + a 404 test URL.',
+      'GET /api/rip-events with no params returns the full machine-readable contract spec (event mappings, query params, response codes, identity-binding philosophy).',
+    ],
+  },
+  {
+    date: '2026-06-23',
     version: '0.6',
     title: 'NeoStampa XML preview — built against the real Inèdit spec',
     bullets: [
