@@ -13,6 +13,21 @@ type Entry = {
 const ENTRIES: Entry[] = [
   {
     date: '2026-06-23',
+    version: '1.4',
+    title: 'Production Manager Home (S03) — visibility-only refresh',
+    bullets: [
+      'New full-width "Open Print Requests Due Within 7 Business Days" section at the top of /megan. Live operational reference: shows PR#, Order#, Customer, Assigned To, Status, Plant# · Design · Colorway, Fabric, Quantity, Promised Date, Due In (business days), Priority/Risk flags.',
+      'Multi-select filters: Assigned To, Customer, Status (chip-count badges, click outside to close, in-dropdown Clear). Quick-filter chips: All, Overdue, Due Today, Due Tomorrow, Due This Week, Unassigned. Top-right Clear Filters action appears when any filter is active.',
+      'Sortable columns (click header): Customer, Assigned, Status, Promised, Priority. Sort direction toggles on repeat click. Sticky table header inside a 640px scroll viewport so the header stays visible while scrolling.',
+      'KPI strip: Open PRs due within 7 business days · Overdue · Due Today · Unassigned. Row click on a PR routes to /print-requests/[id]; Order# routes to /orders/[id] (existing routes preserved).',
+      'Visual flags: overdue rows tinted red, today tinted yellow, Rush / Overdue / Today tag column. Due-In shows "N bd late" (red) or "N bd (Wed Jun 24)" for upcoming.',
+      'Orders in Production is now full-width with expand/collapse per row. Each order row shows Order#, Customer, Roadmap, Status, PR count, Earliest Promised, Latest Promised, and Rush/Overdue flags. Expand shows one-line PR detail rows: PR#, Plant# · Design · Colorway, Fabric, Quantity, Status, Promised. Expand all / Collapse all controls in the card header.',
+      'Removed from the dashboard view: PR Status Mix display, Approvals (OD-3 Gate) tab, Sales / Pipeline tab, Accounting Hand-Off tab. Underlying functions/workflows/components/routes/mock data/permissions/status logic are unchanged — Order Detail still runs the OD-3 approval flow, /intake still handles sales/CSV intake, /orders status filters still show invoice-ready, QuickBooks still owns A/R. Only the dashboard surface is decluttered.',
+      'No schema changes. No new business rules. No new automation. No new operational decision logic. Filters/sorts mutate only the displayed list.',
+    ],
+  },
+  {
+    date: '2026-06-23',
     version: '1.3',
     title: 'Receiving Home — remove Expected Inbound mock; promote Receive Fabric to primary CTA',
     bullets: [
