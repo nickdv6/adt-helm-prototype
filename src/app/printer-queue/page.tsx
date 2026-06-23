@@ -161,6 +161,9 @@ export default function PrinterQueue() {
       <header>
         <h1 className="text-2xl font-bold text-navy-900">Printer Queue — Julio Vargas</h1>
         <p className="text-sm text-gray-500 mt-1">Ready-to-schedule + currently-printing across all printers · fed by <Link href="/intake" className="text-navy-700 hover:underline font-semibold">Intake Command Center</Link></p>
+        <p className="text-[11px] text-gray-500 mt-1 italic">
+          Slice: per-machine queues. Different from <Link href="/megan" className="text-navy-700 hover:underline">Megan</Link>&apos;s &quot;due in 7 business days&quot; and <Link href="/dashboards/daily-production" className="text-navy-700 hover:underline">Daily Production</Link>&apos;s today-only floor view.
+        </p>
       </header>
 
       <div className="grid grid-cols-5 gap-4">

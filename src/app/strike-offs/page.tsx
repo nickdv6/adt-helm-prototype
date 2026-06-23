@@ -5,25 +5,9 @@ import Link from 'next/link';
 import { getDb } from '@/lib/db';
 import { Card, CardHeader, Tag, Button } from '@/components/ui';
 import { formatDate, relativeTime } from '@/lib/utils';
+import { STRIKE_OFF_STATUS_COLORS as STATUS_COLORS } from '@/lib/status-colors';
 
 export const dynamic = 'force-dynamic';
-
-const STATUS_COLORS: Record<string, 'gray' | 'blue' | 'green' | 'yellow' | 'red' | 'purple'> = {
-  'Requested': 'gray',
-  'In Queue': 'gray',
-  'In Color Matching': 'blue',
-  'Printing': 'blue',
-  'Quality Check': 'blue',
-  'Awaiting Approval': 'yellow',
-  'Customer Reviewing': 'yellow',
-  'Approved': 'green',
-  'Approve with Changes': 'purple',
-  'Rejected': 'red',
-  'Revision Required': 'red',
-  'On Hold': 'gray',
-  'Cancelled': 'gray',
-  'Closed': 'gray',
-};
 
 export default function StrikeOffList({ searchParams }: { searchParams: { status?: string; q?: string; sort?: string } }) {
   const db = getDb();
@@ -67,9 +51,15 @@ export default function StrikeOffList({ searchParams }: { searchParams: { status
       <header className="flex items-start justify-between">
         <div>
           <h1 className="text-2xl font-bold text-navy-900">Strike-Off List</h1>
-          <p className="text-sm text-gray-600 mt-0.5">All strike-offs across R4 / R5 routes — 14-status workflow.</p>
+          <p className="text-sm text-gray-600 mt-0.5">Operator worklist — every strike-off across R4 / R5 routes, 14-status workflow.</p>
+          <p className="text-[11px] text-gray-500 mt-1 italic">
+            For metrics + aging + colorist workload, see <Link href="/dashboards/strike-off" className="text-navy-700 hover:underline">Strike-Off Dashboard</Link>.
+          </p>
         </div>
-        <Button>+ New Strike-Off</Button>
+        <div className="flex gap-2">
+          <Link href="/dashboards/strike-off"><Button variant="secondary">Strike-Off Dashboard →</Button></Link>
+          <Button>+ New Strike-Off</Button>
+        </div>
       </header>
 
       <div className="grid grid-cols-4 gap-4">

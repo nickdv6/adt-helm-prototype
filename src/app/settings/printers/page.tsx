@@ -2,6 +2,7 @@
 import Link from 'next/link';
 import { getDb } from '@/lib/db';
 import { Card, CardHeader, Tag, Button } from '@/components/ui';
+import { SettingsTabs } from '@/components/settings-tabs';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,11 +31,9 @@ export default function PrinterManagement() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
+      <SettingsTabs active="/settings/printers" />
       <header className="flex items-start justify-between">
         <div>
-          <div className="flex items-center gap-3 mb-1">
-            <Link href="/settings" className="text-sm text-gray-500 hover:underline">← Settings</Link>
-          </div>
           <h1 className="text-2xl font-bold text-navy-900">Printer Management</h1>
           <p className="text-sm text-gray-600 mt-0.5">Fleet registry — capacity, ink set, location, and live queue depth.</p>
         </div>

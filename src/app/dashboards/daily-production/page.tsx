@@ -51,6 +51,9 @@ export default function DailyProduction() {
       <header>
         <h1 className="text-2xl font-bold text-navy-900">Daily Production Dashboard</h1>
         <p className="text-sm text-gray-600 mt-0.5">Today&apos;s scheduled print activity across the floor — updated live as PRs change state.</p>
+        <p className="text-[11px] text-gray-500 mt-1 italic">
+          Slice: PRs where status IN (Scheduled, Printing, Printed). Different from <Link href="/megan" className="text-navy-700 hover:underline">Megan</Link>&apos;s &quot;due in 7 business days&quot; slice and <Link href="/printer-queue" className="text-navy-700 hover:underline">Printer Queue</Link>&apos;s per-machine queues.
+        </p>
       </header>
 
       <div className="grid grid-cols-5 gap-4">

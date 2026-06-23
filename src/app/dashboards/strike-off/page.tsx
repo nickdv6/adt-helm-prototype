@@ -2,7 +2,7 @@
 // Aging buckets + colorist load + customer-side wait + most-overdue strikes.
 import Link from 'next/link';
 import { getDb } from '@/lib/db';
-import { Card, CardHeader, Tag } from '@/components/ui';
+import { Card, CardHeader, Tag, Button } from '@/components/ui';
 import { relativeTime } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
@@ -68,9 +68,15 @@ export default function StrikeOffDashboard() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
-      <header>
-        <h1 className="text-2xl font-bold text-navy-900">Strike-Off Dashboard</h1>
-        <p className="text-sm text-gray-600 mt-0.5">Workflow health — aging, customer wait time, colorist load, blockers.</p>
+      <header className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-navy-900">Strike-Off Dashboard</h1>
+          <p className="text-sm text-gray-600 mt-0.5">Analyst view — aging, customer wait time, colorist load, blockers.</p>
+          <p className="text-[11px] text-gray-500 mt-1 italic">
+            For the operator worklist, see <Link href="/strike-offs" className="text-navy-700 hover:underline">Strike-Off List</Link>.
+          </p>
+        </div>
+        <Link href="/strike-offs"><Button variant="secondary">Strike-Off List →</Button></Link>
       </header>
 
       <div className="grid grid-cols-5 gap-4">

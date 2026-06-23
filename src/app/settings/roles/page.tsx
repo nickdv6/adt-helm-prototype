@@ -1,6 +1,7 @@
 // S41 Roles & Permissions Admin
 import Link from 'next/link';
 import { Card, CardHeader, Tag, Button } from '@/components/ui';
+import { SettingsTabs } from '@/components/settings-tabs';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,11 +45,9 @@ function permColor(v: string): 'gray' | 'blue' | 'green' | 'purple' {
 export default function RolesPermissions() {
   return (
     <div className="max-w-7xl mx-auto space-y-6">
+      <SettingsTabs active="/settings/roles" />
       <header className="flex items-start justify-between">
         <div>
-          <div className="flex items-center gap-3 mb-1">
-            <Link href="/settings" className="text-sm text-gray-500 hover:underline">← Settings</Link>
-          </div>
           <h1 className="text-2xl font-bold text-navy-900">Roles &amp; Permissions</h1>
           <p className="text-sm text-gray-600 mt-0.5">12 active roles · read / write / admin per resource. Edit cells to change access.</p>
         </div>

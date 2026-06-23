@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { getDb } from '@/lib/db';
 import { Card, CardHeader, Tag } from '@/components/ui';
+import { SettingsTabs } from '@/components/settings-tabs';
 
 // /settings — System Admin (prototype shell)
 
@@ -14,6 +15,7 @@ export default function Settings() {
         <h1 className="text-2xl font-bold text-navy-900">Settings</h1>
         <p className="text-sm text-gray-500 mt-1">Prototype shell — full settings (printer mgmt, intake config edit, notification prefs, OD-3 thresholds, etc.) in Wave 1 build</p>
       </header>
+      <SettingsTabs active="/settings" />
 
       <Card>
         <CardHeader title="Settings Modules" />

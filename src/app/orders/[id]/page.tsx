@@ -109,31 +109,33 @@ export default function OrderDetail({ params }: { params: { id: string } }) {
         </Card>
       ) : null}
 
-      {/* Order Lines + per-line PR breakdown with subway maps */}
+      {/* Order Lines + per-line PR breakdown with subway maps.
+          Phase 2: each line is collapsed by default via native <details>. Click to expand
+          and see the per-PR subway map. Saves scroll on orders with many lines. */}
       <Card>
-        <CardHeader title="Order Lines · Subway Map" subtitle={`Roadmap ${order.roadmap} — each PR plotted along its route. Green = done, navy = current, gray = upcoming.`} />
+        <CardHeader title="Order Lines · Subway Map" subtitle={`Roadmap ${order.roadmap} — ${lines.length} line${lines.length === 1 ? '' : 's'}, click any line to expand its PR subway map.`} />
         <div className="divide-y divide-gray-200">
           {lines.map((line) => {
             const linePRs = prs.filter((p) => p.line_id === line.id);
             return (
-              <div key={line.id} className="px-5 py-5">
-                <div className="flex items-center gap-4 mb-4">
+              <details key={line.id} className="group">
+                <summary className="px-5 py-3 list-none cursor-pointer hover:bg-gray-50 flex items-center gap-4">
+                  <span className="text-gray-400 group-open:rotate-90 transition-transform">▶</span>
                   <div className="font-mono text-xs text-gray-500">{line.adt_sku}</div>
                   <div className="font-semibold">{line.product_type}</div>
                   <div className="text-sm text-gray-600">{line.fabric_name}</div>
                   {line.plant_number && <Tag color="blue">{line.plant_number}</Tag>}
                   {line.colorway_name && <Tag>{line.colorway_name}</Tag>}
-                  <div className="ml-auto text-sm font-mono">
-                    {line.quantity} {line.quantity_unit}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 text-xs mb-4">
                   <Tag color={line.strike_off_classification === 'Customer Strike-Off Required' ? 'yellow' : 'gray'}>
                     {line.strike_off_classification}
                   </Tag>
                   {line.is_click_and_print ? <Tag color="purple">Click-and-Print</Tag> : null}
-                </div>
-
+                  <Tag color={linePRs.length > 0 ? 'blue' : 'gray'}>{linePRs.length} PR{linePRs.length === 1 ? '' : 's'}</Tag>
+                  <div className="ml-auto text-sm font-mono">
+                    {line.quantity} {line.quantity_unit}
+                  </div>
+                </summary>
+                <div className="px-5 pb-5 pt-1">
                 {linePRs.length > 0 ? (
                   <div className="space-y-5 pl-4 border-l-2 border-navy-700/20">
                     {linePRs.map((pr) => {
@@ -171,7 +173,8 @@ export default function OrderDetail({ params }: { params: { id: string } }) {
                     No PRs yet — line is still in intake.
                   </div>
                 )}
-              </div>
+                </div>
+              </details>
             );
           })}
         </div>

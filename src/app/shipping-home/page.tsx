@@ -35,14 +35,20 @@ export default function ShippingHome() {
     <RoleHomeShell
       userName={me?.full_name ?? 'Marcus'}
       userRole="Shipping"
-      greeting="Packed and waiting — rolls ready to label, manifest, and walk out the door."
+      greeting="Personal queue — packed rolls ready to label, manifest, and walk out the door. For the full pack-and-ship operator surface, jump to the Shipping Dashboard."
+      headerAction={
+        <Link href="/shipping"
+          className="inline-flex items-center px-4 py-2.5 text-sm font-semibold rounded bg-navy-700 text-white hover:bg-navy-900">
+          Shipping Dashboard →
+        </Link>
+      }
       kpis={[
         { label: 'Packed rolls', value: packedRolls?.n ?? 0, accent: 'yellow' },
         { label: 'Orders ready to ship', value: readyToShip.length, accent: 'blue' },
         { label: 'Shipped today', value: shippedToday?.n ?? 0, accent: 'green' },
       ]}
       queueTitle="Orders Ready to Ship"
-      queueSubtitle="Promised-date order; flagged for rush + blind-ship handling"
+      queueSubtitle="Promised-date order; flagged for rush + blind-ship handling · Primary pack/ship surface is /shipping"
       queue={
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

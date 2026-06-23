@@ -69,6 +69,9 @@ export default function CutSew() {
       <header>
         <h1 className="text-2xl font-bold text-navy-900">Cut/Sew Workboard — Yuliana Cruz</h1>
         <p className="text-sm text-gray-500 mt-1">S31 · Per Yuliana #2/#3 bundles + progress · Per OD-7 packaging profile per FPR</p>
+        <p className="text-[11px] text-gray-500 mt-1 italic">
+          Source filter: FPRs from production (printed → cut). For FPRs sourced from Shopify stored-inventory pickup, see <Link href="/fulfillment-requests" className="text-navy-700 hover:underline">Fulfillment Requests</Link>. Same entity, two streams.
+        </p>
       </header>
 
       <div className="grid grid-cols-4 gap-4">

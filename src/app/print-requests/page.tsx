@@ -136,6 +136,9 @@ export default function PrintRequestDashboard({ searchParams }: { searchParams: 
           <p className="text-sm text-gray-500 mt-1">
             Showing {prs.length} print requests{hasFilters ? ' matching filters' : ''} · sorted by priority (late first)
           </p>
+          <p className="text-[11px] text-gray-500 mt-1 italic">
+            Slice: all PRs (any state) with filter chips. Compare to <Link href="/megan" className="text-navy-700 hover:underline">Megan</Link> (7-business-day window), <Link href="/dashboards/daily-production" className="text-navy-700 hover:underline">Daily Production</Link> (today only), <Link href="/printer-queue" className="text-navy-700 hover:underline">Printer Queue</Link> (per-machine).
+          </p>
         </div>
         <Link href="/printer-queue">
           <Button variant="secondary">Printer Queue →</Button>

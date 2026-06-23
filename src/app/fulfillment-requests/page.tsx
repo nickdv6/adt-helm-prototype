@@ -167,6 +167,9 @@ export default function FulfillmentRequests({ searchParams }: { searchParams: { 
         <p className="text-sm text-gray-500 mt-1">
           Distinct from Production Orders · pulls from customer-stored inventory · 3 intake channels · 3 label modes (A/B/C)
         </p>
+        <p className="text-[11px] text-gray-500 mt-1 italic">
+          Source filter: FPRs from stored-inventory pickup. For FPRs sourced from finished production runs, see <Link href="/cut-sew" className="text-navy-700 hover:underline">Cut/Sew Workboard</Link>. Same entity, two streams.
+        </p>
       </header>
 
       <div className="grid grid-cols-5 gap-4">

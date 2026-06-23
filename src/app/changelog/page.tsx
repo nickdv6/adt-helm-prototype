@@ -13,6 +13,29 @@ type Entry = {
 const ENTRIES: Entry[] = [
   {
     date: '2026-06-23',
+    version: '1.5',
+    title: 'Pre-handoff polish + overlap cleanup (Phase 1 + Phase 2 of the review report)',
+    bullets: [
+      'New /glossary page with 22 ADT terms (PLANT#, PR#, VPN, FPR, OD-3, OD-9, Roadmap, Click-and-Print, Strike-Off, Multi-Variant, FO, Composite Engine, Traveler QR, Bundle QR, Open Bank, PFP, NeoStampa, Sync Agent, Reconciliation Queue, DASH, Customer Automation Profile). Linked from the prototype banner.',
+      'MockSurfaceBanner component added to 8 mock-only pages (/exceptions, /cut-station, /intake, /po-intake, /customer-configs, /production-scheduling, /it-admin, /batch-ticket) so reviewers do not test stub flows assuming they are live.',
+      'Schema enum value-list comments added to 11 status columns (orders, print_requests, rip_jobs, strike_offs, fprs, inventory_items, customer_materials, shipments, intake_import_log, customer_facing_status, rip_status). Doc-only; no behavior change.',
+      'Reprint visibility: PR Dashboard inline Reprint tag now links to the parent PR with text "Reprint of PR-#####". Subline surfaces reprint_reason_code.',
+      'Ready-to-Ship hint card on Order Detail: when an order is In Production or Partially Complete, shows the gate rule. Green when all PRs Complete (eligible to transition), blue with open-PR count otherwise.',
+      'Tour page gains a "Bonus tip" line explaining the role-aware sidebar.',
+      'page-meta.ts dataSource corrections: /batch-ticket live -> mock, /fulfillment-requests live -> mixed with note.',
+      'Dashboard slice labels added to /dashboards/daily-production, /printer-queue, /print-requests so each clarifies how its filter differs from /megan (the standard).',
+      'Strike-Off worklist and analytics dashboard now cross-link via subtitle + header buttons.',
+      '/shipping-home re-framed as Marcus personal queue with prominent "Shipping Dashboard ->" CTA to the primary /shipping surface.',
+      'FPR source filter messaging on /cut-sew and /fulfillment-requests: both pages now explain they are the same entity, two streams (production vs stored inventory), with cross-link.',
+      'Order Detail per-line subway map is now collapsed by default via native <details>. Summary row shows SKU + product + fabric + plant# + colorway + strike classification + PR count + quantity. Click to expand the subway map.',
+      'SettingsTabs strip added to /settings, /settings/printers, /settings/print-profiles, /settings/roles so admins can pivot between them without going back to /settings.',
+      'Centralized strike-off + artwork + print-process color maps in /src/lib/status-colors.ts. /strike-offs page now imports the shared map.',
+      'Dead-code cleanup: removed unused formatPromised import + variable in /fprs/[id].',
+      'Banner 1.4 -> 1.5.',
+    ],
+  },
+  {
+    date: '2026-06-23',
     version: '1.4',
     title: 'Production Manager Home (S03) — visibility-only refresh',
     bullets: [
