@@ -53,7 +53,7 @@ export default function MeganHome() {
 
   // ----- Orders currently in production with summary metrics + their PRs
   const inProd = db.prepare(`
-    SELECT o.id, o.order_number, o.adt_promised_date, o.is_rush, o.roadmap, o.status,
+    SELECT o.id, o.order_number, o.po_number, o.adt_promised_date, o.is_rush, o.roadmap, o.status,
            c.name as company_name,
            (SELECT COUNT(*) FROM print_requests pr
               JOIN order_lines ol2 ON pr.order_line_id = ol2.id

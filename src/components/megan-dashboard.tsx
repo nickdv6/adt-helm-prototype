@@ -12,7 +12,7 @@ import { Fragment, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Card, CardHeader, StatusPill, Tag } from '@/components/ui';
 import { formatDate, formatPromised } from '@/lib/utils';
-import { ChevronDown, ChevronRight, Filter, X, AlertTriangle, Clock } from 'lucide-react';
+import { ChevronDown, ChevronRight, Filter, X, AlertTriangle, Clock, Search } from 'lucide-react';
 
 // ------------------------------------------------------------
 // Types
@@ -38,6 +38,7 @@ export interface DueSoonPR {
 export interface OrderRow {
   id: number;
   order_number: string;
+  po_number: string | null;
   company_name: string;
   adt_promised_date: string | null;
   is_rush: number;
@@ -337,6 +338,7 @@ function DueInTag({ days, promisedLabel }: { days: number | null; promisedLabel:
 // ============================================================
 function OrdersInProductionSection({ orders, prsByOrder }: { orders: OrderRow[]; prsByOrder: Record<number, OrderPR[]> }) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [search, setSearch] = useState('');
 
   function toggle(id: number) {
     const n = new Set(expanded);
@@ -344,11 +346,22 @@ function OrdersInProductionSection({ orders, prsByOrder }: { orders: OrderRow[];
     setExpanded(n);
   }
   function expandAll() {
-    setExpanded(new Set(orders.map((o) => o.id)));
+    setExpanded(new Set(filtered.map((o) => o.id)));
   }
   function collapseAll() {
     setExpanded(new Set());
   }
+
+  // Text filter: match against order_number / company_name / po_number (case-insensitive)
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return orders;
+    return orders.filter((o) =>
+      o.order_number.toLowerCase().includes(q) ||
+      o.company_name.toLowerCase().includes(q) ||
+      (o.po_number ?? '').toLowerCase().includes(q)
+    );
+  }, [orders, search]);
 
   return (
     <Card>
@@ -363,29 +376,56 @@ function OrdersInProductionSection({ orders, prsByOrder }: { orders: OrderRow[];
           </div>
         }
       />
+
+      {/* Text filter — Order # / Customer / PO# */}
+      <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-3">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Filter by Order #, Customer, or PO#…"
+            className="w-full pl-8 pr-7 py-1.5 text-xs bg-white border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-navy-700/20 focus:border-navy-700"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700" title="Clear">
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+        <div className="text-[11px] text-gray-500 font-mono">
+          Showing {filtered.length} of {orders.length}
+        </div>
+      </div>
+
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-[10px] text-gray-500 uppercase tracking-wider">
             <tr>
               <th className="w-8 px-2"></th>
               <th className="text-left px-3 py-2.5">Order #</th>
+              <th className="text-left px-3 py-2.5">PO #</th>
               <th className="text-left px-3 py-2.5">Customer</th>
               <th className="text-left px-3 py-2.5">Status</th>
-              <th className="text-right px-3 py-2.5">PR Count</th>
+              <th className="text-left px-3 py-2.5">PRs</th>
               <th className="text-left px-3 py-2.5">Earliest Promised</th>
               <th className="text-left px-3 py-2.5">Latest Promised</th>
               <th className="text-left px-3 py-2.5">Flags</th>
             </tr>
           </thead>
           <tbody>
-            {orders.length === 0 && (
-              <tr><td colSpan={8} className="px-3 py-12 text-center text-sm text-gray-400 italic">No orders currently in production.</td></tr>
+            {filtered.length === 0 && (
+              <tr><td colSpan={9} className="px-3 py-12 text-center text-sm text-gray-400 italic">
+                {orders.length === 0 ? 'No orders currently in production.' : 'No orders match the filter.'}
+              </td></tr>
             )}
-            {orders.map((o) => {
+            {filtered.map((o) => {
               const isOpen = expanded.has(o.id);
               const prs = prsByOrder[o.id] ?? [];
               const earliestD = businessDaysUntil(o.earliest_promised);
               const isOverdue = earliestD !== null && earliestD < 0;
+              const isMulti = (o.pr_count ?? prs.length) > 1;
               return (
                 <Fragment key={o.id}>
                   <tr className={`border-t border-gray-100 cursor-pointer hover:bg-navy-50/40 ${isOpen ? 'bg-navy-50/60' : ''} ${isOverdue ? 'border-l-2 border-l-red-400' : ''}`} onClick={() => toggle(o.id)}>
@@ -395,9 +435,12 @@ function OrdersInProductionSection({ orders, prsByOrder }: { orders: OrderRow[];
                     <td className="px-3 py-2.5">
                       <Link href={`/orders/${o.id}`} onClick={(e) => e.stopPropagation()} className="font-mono text-xs font-semibold text-navy-700 hover:underline">{o.order_number}</Link>
                     </td>
+                    <td className="px-3 py-2.5 font-mono text-xs text-gray-700">{o.po_number ?? <span className="text-gray-400">—</span>}</td>
                     <td className="px-3 py-2.5 text-xs">{o.company_name}</td>
                     <td className="px-3 py-2.5"><StatusPill status={o.status} /></td>
-                    <td className="px-3 py-2.5 text-right font-mono text-xs">{o.pr_count}{prs.length > 1 && <Tag color="blue">multi</Tag>}</td>
+                    <td className="px-3 py-2.5 text-xs">
+                      <Tag color={isMulti ? 'blue' : 'gray'}>{isMulti ? 'MULTI' : 'SINGLE'}</Tag>
+                    </td>
                     <td className="px-3 py-2.5 text-xs">{formatDate(o.earliest_promised)}</td>
                     <td className="px-3 py-2.5 text-xs">{formatDate(o.latest_promised)}</td>
                     <td className="px-3 py-2.5 text-xs">
@@ -409,10 +452,10 @@ function OrdersInProductionSection({ orders, prsByOrder }: { orders: OrderRow[];
                   </tr>
                   {isOpen && (
                     <tr className="bg-gray-50/60">
-                      <td colSpan={8} className="px-0 py-0">
+                      <td colSpan={9} className="px-0 py-0">
                         <div className="border-t border-gray-200 px-12 py-3">
                           <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1.5">
-                            Print Requests ({prs.length}) — one row per PR
+                            Print Requests — one row per PR
                           </div>
                           <table className="w-full text-xs">
                             <thead className="text-[10px] text-gray-500 uppercase tracking-wider">
