@@ -389,9 +389,6 @@ CREATE TABLE IF NOT EXISTS print_requests (
   auto_prep_completed_at TEXT,
   hot_folder_target TEXT,
   scheduled_at TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  FOREIGN KEY (order_line_id) REFERENCES order_lines(id),
-  FOREIGN KEY (artwork_file_id) REFERENCES artwork_files(id),
   -- NeoStampa Sync / RIP lifecycle (Phase 1 build): an explicit RIP job wraps
   -- the existing composite step + adds NeoStampa hot-folder submission, agent
   -- monitoring, and a 12-state lifecycle. external_job_name is the deterministic
@@ -399,9 +396,12 @@ CREATE TABLE IF NOT EXISTS print_requests (
   external_job_name TEXT,
   fabric_output_id INTEGER,                          -- Parent QR record (one printed run = one FabricOutput)
   current_rip_job_id INTEGER,                        -- The active/latest RipJob for this PR
-  rip_status TEXT NOT NULL DEFAULT 'not_started',    -- 'not_started' | 'ready_for_rip' | 'package_created' | 'submitted' | 'accepted' | 'ripping' | 'rip_complete' | 'queued_for_print' | 'printing' | 'print_complete_software' | 'print_complete_qr' | 'error' | 'held'
+  rip_status TEXT NOT NULL DEFAULT 'not_started',    -- 12-state RIP lifecycle (see rip_jobs.status comments)
   rip_retry_count INTEGER NOT NULL DEFAULT 0,
   rip_last_event_at TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  FOREIGN KEY (order_line_id) REFERENCES order_lines(id),
+  FOREIGN KEY (artwork_file_id) REFERENCES artwork_files(id),
   FOREIGN KEY (printer_id) REFERENCES printers(id),
   FOREIGN KEY (fabric_id) REFERENCES fabrics(id),
   FOREIGN KEY (reprint_of_pr_id) REFERENCES print_requests(id),
