@@ -243,11 +243,22 @@ function handleEvent({
       would_persist: {
         insert_into: 'rip_jobs',
         row: woundCreate,
+        // When auto-bound (high confidence), also denormalize onto the parent PR
+        // so PR Detail shows the new external_job_name + rip_status immediately.
+        update_print_requests: (resolved && match && match.confidence >= 90) ? {
+          where: { id: resolved.id },
+          set: {
+            current_rip_job_id: '<new rip_jobs.id from this INSERT>',
+            external_job_name: job,
+            rip_status: 'submitted',
+            rip_last_event_at: new Date().toISOString(),
+          },
+        } : null,
       },
       next_step: resolved
         ? `Visit /print-requests/${resolved.pr_number} to confirm the binding.`
         : 'Operator picks the job up from /printer-queue · Reconciliation Queue and clicks Bind to PR (fires manual_associate).',
-      note: 'Prototype mock: validates + auto-matches + returns the would-be write. Production inserts a real rip_jobs row.',
+      note: 'Prototype mock: validates + auto-matches + returns the would-be write. Production inserts the rip_jobs row, updates the parent PR (if auto-bound), and writes a reconciliation event — all in one transaction.',
     }, { status: 200 });
   }
 
@@ -279,8 +290,11 @@ function handleEvent({
       previous_reconciliation_status: ripJob.reconciliation_status,
       would_persist: {
         update_rip_jobs: {
-          print_request_id: targetPr.id,
-          reconciliation_status: 'manual_associated',
+          where: { id: ripJob.id },
+          set: {
+            print_request_id: targetPr.id,
+            reconciliation_status: 'manual_associated',
+          },
         },
         insert_into: 'rip_job_events',
         row: {
@@ -289,8 +303,21 @@ function handleEvent({
           source: 'manual',
           details: details ?? `Bound to ${targetPr.pr_number}`,
         },
+        // Denormalize onto the parent PR so the PR Detail / PR Dashboard
+        // pick up the Canvas job's status immediately. The PR's existing
+        // current_rip_job_id (if any) is overwritten — the Canvas job becomes
+        // the PR's active rip job.
+        update_print_requests: {
+          where: { id: targetPr.id },
+          set: {
+            current_rip_job_id: ripJob.id,
+            external_job_name: job,
+            rip_status: ripJob.status,
+            rip_last_event_at: new Date().toISOString(),
+          },
+        },
       },
-      note: 'Prototype mock: validates + returns the would-be write. Production UPDATEs rip_jobs + INSERTs the event in a transaction.',
+      note: 'Prototype mock: validates + returns the would-be write. Production UPDATEs rip_jobs + UPDATEs the parent PR + INSERTs the manual_associate event — all in one transaction.',
     }, { status: 200 });
   }
 
@@ -372,8 +399,20 @@ function handleEvent({
         update_rip_jobs: mapping.next_status
           ? { status: newStatus, rip_last_event_at: new Date().toISOString() }
           : null,
+        // Denormalized propagation: the parent PR row carries rip_status /
+        // rip_last_event_at / current_rip_job_id so the PR Dashboard + PR Detail
+        // can show RIP state without a join on every render. Updated whenever
+        // the rip_job status changes AND the rip_job is bound to a PR.
+        update_print_requests: (mapping.next_status && ripJob.pr_id) ? {
+          where: { id: ripJob.pr_id },
+          set: {
+            rip_status: newStatus,
+            rip_last_event_at: new Date().toISOString(),
+            current_rip_job_id: ripJob.id,
+          },
+        } : null,
       },
-      note: 'Prototype mock: validates + looks up + would-persist. Vercel filesystem is read-only at runtime. Production (Postgres) executes the persist + audits via rip_job_events.',
+      note: 'Prototype mock: validates + looks up + would-persist. Vercel filesystem is read-only at runtime. Production (Postgres) executes the persist + audits via rip_job_events. All three writes (rip_job_events, rip_jobs, print_requests) happen in one transaction.',
     },
     { status: 200 },
   );
