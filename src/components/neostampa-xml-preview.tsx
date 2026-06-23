@@ -169,8 +169,13 @@ export function NeoStampaXmlPreview({ input, onClose }: { input: XmlJobInput; on
           <pre className="text-[11px] leading-5 font-mono text-gray-800 bg-gray-50 border border-gray-200 rounded p-4 whitespace-pre">
             {xml}
           </pre>
-          <div className="mt-3 text-[10px] text-gray-500 italic">
-            Generated against Inèdit neoRipEngine spec v4.23.0. Notification URLs would be POSTed by the agent when print events fire — Helm ingests these at <code className="font-mono">/api/rip-events</code> and writes <code className="font-mono">rip_job_events</code> rows. The composite/.prn file is produced upstream by the Compositing Engine and dropped into the hot folder at <code className="font-mono break-all">{input.hotFolderPath}</code>.
+          <div className="mt-3 text-[10px] text-gray-500 italic space-y-1.5">
+            <div>
+              Generated against Inèdit neoRipEngine spec v4.23.0. Notification URLs would be POSTed by the agent when print events fire — Helm ingests these at <code className="font-mono">/api/rip-events</code> and writes <code className="font-mono">rip_job_events</code> rows. The composite/.prn file is produced upstream by the Compositing Engine and dropped into the hot folder at <code className="font-mono break-all">{input.hotFolderPath}</code>.
+            </div>
+            <div>
+              <strong>Helm-originated only.</strong> Canvas-originated jobs (started in NeoStampa Canvas by a colorist, not minted by Helm) don&apos;t carry this XML — they get observed by the agent via log-tail and land in the Reconciliation Queue on <code className="font-mono">/printer-queue</code> until an operator binds them to a PR.
+            </div>
           </div>
         </div>
       </div>

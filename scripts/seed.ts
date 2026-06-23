@@ -983,6 +983,89 @@ prsForRip.forEach((pr) => {
 });
 console.log(`  RIP jobs: ${ripJobsCreated}, events: ${ripEventsCreated}`);
 
+// ============================================================
+// Unattributed (Canvas-originated) RIP jobs
+// ============================================================
+// Colorists often start jobs in NeoStampa Canvas directly. The Sync Agent
+// observes those jobs via log-tail + hot-folder watch and reports them to
+// Helm BEFORE they're bound to a PR. They sit in the Reconciliation Queue
+// until an operator binds them (manual_associate) or auto-match succeeds.
+console.log('Seeding unattributed Canvas-originated RIP jobs (Reconciliation Queue)...');
+const insUnattributedRipJob = db.prepare(`
+  INSERT INTO rip_jobs (
+    print_request_id, origin, neostampa_job_id, fabric_output_id, external_job_name, status,
+    hot_folder_id, neostampa_agent_id, package_path, retry_count, is_held,
+    auto_match_score, reconciliation_status,
+    submitted_at, accepted_at, rip_started_at, rip_completed_at,
+    print_started_at, print_completed_software_at, created_at
+  ) VALUES (?, 'neostampa_gui', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`);
+// Sample Canvas-originated jobs — names a colorist might save in NeoStampa.
+// Some contain PR-#### (high-confidence auto-match candidates), some PLANT# (medium),
+// some are vague (require manual review).
+const unattributed = [
+  { name: 'st_frank_cypress_indigo_PR-4506_rerun.tif', score: 95, status: 'awaiting_review',
+    note: 'Filename contains PR-4506 → high-confidence auto-match suggestion. Operator must confirm before binding.' },
+  { name: 'inside_marisol_coral_v2.psd',               score: 0,  status: 'awaiting_review',
+    note: 'No PR or PLANT# in filename. CSR / colorist must search and bind manually.' },
+  { name: 'P26-1042_jeannine_test_print.tif',          score: 70, status: 'awaiting_review',
+    note: 'PLANT# P26-1042 matches an active design — colorist may have been testing color match.' },
+  { name: 'laura_park_marigold_yellow_print.tif',       score: 0,  status: 'awaiting_review',
+    note: 'Vague filename. Reconciliation needed.' },
+  { name: 'PR-4789_lemieux_textured_natural_strike.tif', score: 92, status: 'auto_matched',
+    note: 'Auto-matched to PR-4789 via filename (>70 confidence). Awaiting final operator confirmation.' },
+  { name: 'havenly_sage_block_olive_canvas_test.tif',   score: 0,  status: 'flagged_no_pr',
+    note: 'Marked by operator as "internal test print — no PR association needed".' },
+  { name: 'jeannine_color_match_durst_test_03.tif',     score: 0,  status: 'flagged_no_pr',
+    note: 'Color-match calibration print. No PR association.' },
+  { name: 'kravet_oxford_navy_PR-4612.tif',             score: 95, status: 'awaiting_review',
+    note: 'Filename contains PR-4612 → high-confidence auto-match suggestion.' },
+  { name: 'st_frank_v3_REPRINT.tif',                    score: 0,  status: 'awaiting_review',
+    note: 'Vague filename + reprint indicator. May tie to multiple open St Frank PRs.' },
+  { name: 'inside_terra_blush_PR-4651_strike.tif',      score: 95, status: 'manual_associated',
+    note: 'Manually associated by Sarah (CSR) to PR-4651 after color review.' },
+  { name: 'untitled_durst_2026-06-22.tif',              score: 0,  status: 'awaiting_review',
+    note: 'Default NeoStampa filename — colorist forgot to rename. CSR investigation needed.' },
+  { name: 'P26-0997_color_proof.tif',                   score: 65, status: 'awaiting_review',
+    note: 'PLANT# match but multiple recent PRs exist for this design — needs operator selection.' },
+];
+let unattributedCounter = 0;
+unattributed.forEach((u, idx) => {
+  // Pick a printer at random — Canvas jobs route to whichever RIP the colorist sat at
+  const printer = faker.helpers.arrayElement(printers);
+  const agentName = printerAgentMap[printer.name] ?? 'RIP-Bay-A';
+  const agentId = agentIds[agentName];
+  const hotFolderId = hotFolderByPrinterId[printer.id] ?? null;
+  // Distribute statuses — most are 'printing' or 'print_complete_software' since
+  // they've been observed mid-flight
+  const status = faker.helpers.arrayElement(['ripping', 'queued_for_print', 'printing', 'print_complete_software']);
+  const created = faker.date.recent({ days: 1 }).toISOString();
+  const submittedAt = new Date(new Date(created).getTime() + 60000).toISOString();
+  insUnattributedRipJob.run(
+    null,                                              // no PR yet
+    `nS_job_${faker.string.alphanumeric(10)}`,         // NeoStampa internal ID
+    null,                                              // no fabric output yet either
+    u.name,                                            // external_job_name = the file colorist saved
+    status,
+    hotFolderId, agentId,
+    `\\\\${agentName.toLowerCase()}\\local\\users\\colorist\\Documents\\NeoStampa\\${u.name}`,
+    0, 0,
+    u.score, u.status,
+    submittedAt,
+    new Date(new Date(submittedAt).getTime() + 30000).toISOString(),
+    new Date(new Date(submittedAt).getTime() + 60000).toISOString(),
+    ['rip_complete','queued_for_print','printing','print_complete_software'].indexOf(status) >= 0
+      ? new Date(new Date(submittedAt).getTime() + 600000).toISOString() : null,
+    ['queued_for_print','printing','print_complete_software'].indexOf(status) >= 0
+      ? new Date(new Date(submittedAt).getTime() + 700000).toISOString() : null,
+    status === 'print_complete_software'
+      ? new Date(new Date(submittedAt).getTime() + 1500000).toISOString() : null,
+    created,
+  );
+  unattributedCounter++;
+});
+console.log(`  Unattributed Canvas-originated RIP jobs: ${unattributedCounter}`);
+
 console.log('Seeding notifications (recent in-app for active roles)...');
 const insNote = db.prepare(`
   INSERT INTO notifications (notification_code, recipient_user_id, recipient_role, channel, subject, body, related_entity_type, related_entity_id, is_read, created_at)

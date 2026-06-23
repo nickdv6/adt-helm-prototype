@@ -496,6 +496,32 @@ Content-Type: application/json
             <Tag color="red">404 orphaned_event — raises EX-RIP-ORPHANED</Tag>
           </div>
 
+          <div className="border-t border-gray-100 pt-3 mt-1">
+            <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1">Two origins — Helm-minted vs Canvas-originated</div>
+            <div className="text-xs text-gray-600 space-y-1.5">
+              <div>
+                <strong className="text-navy-700">Helm-originated:</strong> Helm mints the external_job_name, writes the XML to the hot folder, agent picks up. Standard lifecycle events flow back via the URLs above.
+              </div>
+              <div>
+                <strong className="text-navy-700">Canvas-originated:</strong> Colorist opens a file in NeoStampa Canvas, makes adjustments, clicks print. Agent observes via log-tail and POSTs <code className="font-mono">agent_observed_job</code>. Helm auto-matches the filename (PR-#### = 95% confidence · PLANT# = 70%) or routes to the Reconciliation Queue. Operator later fires <code className="font-mono">manual_associate</code> to bind.
+              </div>
+              <div className="flex gap-2 mt-2">
+                <a href="/api/rip-events?event=agent_observed_job&job=st_frank_cypress_indigo_PR-4506_rerun.tif&agent=RIP-Bay-A" target="_blank" rel="noreferrer"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-navy-700 bg-white border border-gray-300 hover:bg-gray-50 rounded">
+                  <ExternalLink className="w-3.5 h-3.5" />Test auto-match (95%)
+                </a>
+                <a href="/api/rip-events?event=agent_observed_job&job=untitled_durst_2026-06-22.tif&agent=RIP-Bay-A" target="_blank" rel="noreferrer"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-navy-700 bg-white border border-gray-300 hover:bg-gray-50 rounded">
+                  <ExternalLink className="w-3.5 h-3.5" />Test no-match (Reconciliation)
+                </a>
+                <Link href="/printer-queue#reconciliation"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-navy-700 bg-white border border-gray-300 hover:bg-gray-50 rounded">
+                  Reconciliation Queue →
+                </Link>
+              </div>
+            </div>
+          </div>
+
           <div className="flex gap-2 pt-1">
             <a href="/api/rip-events" target="_blank" rel="noreferrer"
               className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-navy-700 bg-white border border-gray-300 hover:bg-gray-50 rounded">

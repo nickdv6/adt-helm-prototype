@@ -467,9 +467,20 @@ CREATE TABLE IF NOT EXISTS fabric_outputs (
 -- multiple RipJobs over its lifetime if reprocessed.
 CREATE TABLE IF NOT EXISTS rip_jobs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  print_request_id INTEGER NOT NULL,
+  -- print_request_id is NULLABLE: many jobs originate in the NeoStampa Canvas GUI (a
+  -- colorist opens a file, makes adjustments, clicks print) and reach Helm via the
+  -- agent BEFORE they're bound to a Helm PR. Those rows sit in the Reconciliation
+  -- Queue until an operator binds them (manual_associate event) or auto-match succeeds.
+  print_request_id INTEGER,
+  -- origin tracks who started the job. 'helm' = Helm minted the external_job_name +
+  -- wrote XML to the hot folder. 'neostampa_gui' = colorist started it in the Canvas;
+  -- agent observed it via log-tail / hot-folder watch and reported it back.
+  origin TEXT NOT NULL DEFAULT 'helm',                -- 'helm' | 'neostampa_gui' | 'unknown'
+  -- NeoStampa's internal job ID (e.g. nS_job_a3f9c2). Helm doesn't control this —
+  -- it's the agent's way of disambiguating between simultaneous Canvas jobs.
+  neostampa_job_id TEXT,
   fabric_output_id INTEGER,
-  external_job_name TEXT NOT NULL UNIQUE,            -- CUSTOMER_PR-#_FO-#_DESIGN_COLORWAY_yyYD · UNIQUE prevents NeoStampa name collisions; reprints append _R2/_R3 suffix
+  external_job_name TEXT NOT NULL UNIQUE,            -- For Helm-originated: CUSTOMER_PR-#_FO-#_DESIGN_COLORWAY_yyYD. For Canvas-originated: the artwork filename the colorist saved.
   status TEXT NOT NULL DEFAULT 'ready_for_rip',      -- 12-state flow
   hot_folder_id INTEGER,
   neostampa_agent_id INTEGER,
@@ -478,6 +489,10 @@ CREATE TABLE IF NOT EXISTS rip_jobs (
   is_held INTEGER NOT NULL DEFAULT 0,
   hold_reason TEXT,
   error_message TEXT,
+  -- Auto-match confidence score (0-100). 0 = no PR bound. >70 = high-confidence
+  -- auto-match (filename contained PR-#). 30-70 = suggestion only, manual review.
+  auto_match_score INTEGER NOT NULL DEFAULT 0,
+  reconciliation_status TEXT NOT NULL DEFAULT 'attributed',  -- 'attributed' | 'awaiting_review' | 'auto_matched' | 'manual_associated' | 'flagged_no_pr'
   submitted_at TEXT,
   accepted_at TEXT,
   rip_started_at TEXT,

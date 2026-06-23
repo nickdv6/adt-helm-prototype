@@ -280,13 +280,110 @@ export default function PrinterQueue() {
         </div>
       </Card>
 
+      {/* NeoStampa Reconciliation Queue — Phase 1.7
+          Canvas-originated jobs (colorist opened a file in NeoStampa GUI, made
+          adjustments, clicked print) that the Sync Agent observed but Helm hasn't
+          bound to a PR yet. Some auto-matched by filename, others need manual review. */}
+      <Card>
+        <CardHeader
+          title="NeoStampa Reconciliation Queue"
+          subtitle="Jobs that originated in the NeoStampa Canvas (not Helm). Bind each to a Helm PR — or flag as 'internal test print, no PR needed'."
+          action={
+            <div className="flex gap-2">
+              <Tag color="yellow">{(() => {
+                const c = (db.prepare(`SELECT COUNT(*) as n FROM rip_jobs WHERE origin = 'neostampa_gui' AND reconciliation_status IN ('awaiting_review','auto_matched')`).get() as any).n;
+                return `${c} awaiting`;
+              })()}</Tag>
+            </div>
+          }
+        />
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
+              <tr>
+                <th className="text-left px-4 py-2.5">NS Job ID</th>
+                <th className="text-left px-4 py-2.5">Filename</th>
+                <th className="text-left px-4 py-2.5">Printer · Agent</th>
+                <th className="text-left px-4 py-2.5">Status</th>
+                <th className="text-left px-4 py-2.5">Auto-match</th>
+                <th className="text-left px-4 py-2.5">Reconciliation</th>
+                <th className="text-right px-4 py-2.5 pr-5">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(db.prepare(`
+                SELECT rj.id, rj.external_job_name, rj.neostampa_job_id, rj.status,
+                       rj.auto_match_score, rj.reconciliation_status,
+                       p.name as printer_name, a.name as agent_name
+                FROM rip_jobs rj
+                LEFT JOIN hot_folders hf ON rj.hot_folder_id = hf.id
+                LEFT JOIN printers p ON hf.printer_id = p.id
+                LEFT JOIN neostampa_agents a ON rj.neostampa_agent_id = a.id
+                WHERE rj.origin = 'neostampa_gui'
+                ORDER BY
+                  CASE rj.reconciliation_status
+                    WHEN 'awaiting_review' THEN 0
+                    WHEN 'auto_matched' THEN 1
+                    WHEN 'manual_associated' THEN 2
+                    WHEN 'flagged_no_pr' THEN 3
+                    ELSE 4
+                  END,
+                  rj.id DESC
+                LIMIT 30
+              `).all() as any[]).map((j) => {
+                const status = j.reconciliation_status;
+                const tagColor: 'gray' | 'blue' | 'yellow' | 'green' | 'red' =
+                  status === 'auto_matched' ? 'blue'
+                  : status === 'manual_associated' ? 'green'
+                  : status === 'flagged_no_pr' ? 'gray'
+                  : 'yellow';
+                return (
+                  <tr key={j.id} className="border-t border-gray-100 hover:bg-gray-50">
+                    <td className="px-4 py-2 font-mono text-[10px] text-gray-500">{j.neostampa_job_id ?? '—'}</td>
+                    <td className="px-4 py-2 font-mono text-[11px] text-gray-700 break-all max-w-md">{j.external_job_name}</td>
+                    <td className="px-4 py-2 text-xs">
+                      <div>{j.printer_name ?? '—'}</div>
+                      <div className="text-[10px] text-gray-500">{j.agent_name ?? '—'}</div>
+                    </td>
+                    <td className="px-4 py-2"><Tag>{j.status.replace(/_/g, ' ')}</Tag></td>
+                    <td className="px-4 py-2 text-xs">
+                      {j.auto_match_score >= 90 ? <Tag color="green">{j.auto_match_score}% confidence</Tag>
+                        : j.auto_match_score >= 60 ? <Tag color="yellow">{j.auto_match_score}% suggestion</Tag>
+                        : <span className="text-gray-400">—</span>}
+                    </td>
+                    <td className="px-4 py-2"><Tag color={tagColor}>{status.replace(/_/g, ' ')}</Tag></td>
+                    <td className="px-4 py-2 text-right pr-5">
+                      {status === 'awaiting_review' || status === 'auto_matched' ? (
+                        <div className="flex gap-1 justify-end">
+                          <Button size="sm">Bind to PR</Button>
+                          <Button size="sm" variant="ghost">Flag · no PR</Button>
+                        </div>
+                      ) : status === 'manual_associated' ? (
+                        <Tag color="green">✓ bound</Tag>
+                      ) : (
+                        <Tag>internal · no PR</Tag>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="px-4 py-2 border-t border-gray-100 text-[11px] text-gray-500 italic">
+          Most Canvas-originated jobs are color-match tests or strike-offs — operators bind them to PRs after the fact.
+          Helm auto-suggests when filenames contain <code className="font-mono">PR-####</code> (95% confidence) or <code className="font-mono">P##-####</code> PLANT# (70%).
+          Manual binding fires <code className="font-mono">manual_associate</code> via <Link href="/api/rip-events" className="text-navy-700 underline">/api/rip-events</Link>.
+        </div>
+      </Card>
+
       {/* RIP · NeoStampa Activity — added Phase 1 of NeoStampa Sync.
           Shows all active RipJobs with external job name, RIP status, agent, retry,
           and per-row submit/retry/hold/view-log actions. */}
       <Card>
         <CardHeader
-          title="RIP · NeoStampa Activity"
-          subtitle="Active jobs across all printers — external job names, RIP states, agent assignment, retries. Truth: software status here, QR scan truth in fabric outputs."
+          title="RIP · NeoStampa Activity · Helm-originated"
+          subtitle="Helm-originated jobs (XML written to hot folder from PRs). Canvas-originated jobs live in the Reconciliation Queue above."
           action={
             <div className="flex gap-2">
               <Button size="sm" variant="secondary">Submit Ready</Button>
@@ -324,6 +421,7 @@ export default function PrinterQueue() {
                 LEFT JOIN neostampa_agents a ON rj.neostampa_agent_id = a.id
                 WHERE rj.status NOT IN ('print_complete_qr')
                   AND pr.status NOT IN ('Cancelled')
+                  AND rj.origin = 'helm'
                 ORDER BY
                   CASE rj.status WHEN 'error' THEN 0 WHEN 'held' THEN 1 ELSE 2 END,
                   rj.id DESC

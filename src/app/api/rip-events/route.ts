@@ -36,15 +36,43 @@ const EVENT_MAP: Record<string, { event_type: string; next_status?: string; desc
   error:                    { event_type: 'error',                    next_status: 'error',                  description: 'Agent log-tail picked up an error from NeoStampa logs.' },
   meter_advanced:           { event_type: 'message',                                                         description: 'Agent log-tail picked up an ink meter advance.' },
   retried:                  { event_type: 'retried',                  next_status: 'submitted',              description: 'Operator manually retried after error.' },
+  // ---- Canvas-originated workflow ----
+  agent_observed_job:       { event_type: 'agent_observed_job',                                              description: 'Agent observed a new NeoStampa job that ORIGINATED IN THE CANVAS GUI (not in Helm). Helm creates an unattributed RipJob, attempts filename auto-match, and either binds it to a PR or routes it to the Reconciliation Queue.' },
+  manual_associate:         { event_type: 'manual_associate',                                                description: 'Operator binds a Canvas-originated NeoStampa job to a Helm PR via the Reconciliation Queue UI. Sets rip_jobs.print_request_id + reconciliation_status=manual_associated.' },
 };
+
+// Parse a Canvas filename for high-confidence Helm identifiers.
+// Returns the lookup key + confidence score (0-100).
+function tryAutoMatch(filename: string): { key: 'pr_number' | 'plant_number'; value: string; confidence: number } | null {
+  // PR-#### format
+  const prMatch = filename.match(/PR-(\d{4,6})/i);
+  if (prMatch) return { key: 'pr_number', value: `PR-${prMatch[1]}`, confidence: 95 };
+  // P##-#### (PLANT#)
+  const plantMatch = filename.match(/P\d{2}-\d{4}/i);
+  if (plantMatch) return { key: 'plant_number', value: plantMatch[0].toUpperCase(), confidence: 70 };
+  return null;
+}
 
 // =====================================================================
 // Contract docs returned by GET with no params
 // =====================================================================
 const CONTRACT_DOCS = {
   endpoint: '/api/rip-events',
-  purpose: 'Ingestion webhook for NeoStampa RIP lifecycle events. Receives notifications from Inèdit neoRipEngine + the Helm-side Sync Agent, looks up the corresponding RipJob in Helm by external_job_name, and writes events to rip_job_events + advances rip_jobs.status.',
+  purpose: 'Ingestion webhook for NeoStampa RIP lifecycle events. Receives notifications from Inèdit neoRipEngine + the Helm-side Sync Agent, looks up the corresponding RipJob in Helm by external_job_name, and writes events to rip_job_events + advances rip_jobs.status. Also handles Canvas-originated jobs (started in the NeoStampa GUI, not in Helm) via the agent_observed_job + manual_associate event pair — see "two origins" below.',
   spec_reference: 'Inèdit neoRipEngine 4.23.0 · Notifications §p.85',
+  two_origins: {
+    helm: 'Helm minted the external_job_name + wrote the job XML to the hot folder. Agent picks it up and fires standard lifecycle events (package_created → submitted → … → print_completed_qr).',
+    neostampa_gui: 'A colorist opened a file in the NeoStampa Canvas, made adjustments, and clicked print. The agent observes the job via log-tail + hot-folder watch and sends an agent_observed_job event. Helm tries to auto-match the filename to a PR (PR-#### or PLANT# match) and either binds it directly or routes it to the Reconciliation Queue for operator review (manual_associate event).',
+  },
+  reconciliation_flow: [
+    '1. Colorist starts a job in NeoStampa Canvas.',
+    '2. Agent observes (log-tail / hot-folder watch) and POSTs agent_observed_job to Helm.',
+    '3. Helm parses filename for PR-#### (95% confidence) or PLANT# (70%).',
+    '4. High-confidence match → bind print_request_id, reconciliation_status=auto_matched, awaits operator confirmation.',
+    '5. Low or no match → reconciliation_status=awaiting_review, lands in /printer-queue Reconciliation Queue.',
+    '6. Operator clicks "Bind to PR" → POST manual_associate with neostampa_job_id + pr → rip_jobs.print_request_id set, reconciliation_status=manual_associated.',
+    '7. Lifecycle events from that point on resolve normally via external_job_name.',
+  ],
   methods: {
     GET: {
       description: 'Inèdit-style Notification URL fires GET with query params. Also returns this contract doc when called without params.',
@@ -158,8 +186,118 @@ function handleEvent({
     );
   }
 
-  // Look up the RipJob by external_job_name
   const db = getDb();
+
+  // ============================================================
+  // agent_observed_job — Canvas-originated job announcement
+  // ============================================================
+  if (event === 'agent_observed_job') {
+    // Try to auto-match the filename to a Helm PR.
+    const match = tryAutoMatch(job);
+    const woundCreate: any = {
+      origin: 'neostampa_gui',
+      external_job_name: job,
+      neostampa_job_id: details ?? null,           // agent sends NS job id in details
+      agent: agent ?? null,
+      status: 'submitted',
+      auto_match_score: 0,
+      reconciliation_status: 'awaiting_review',
+      print_request_id: null,
+    };
+    let resolved: any = null;
+    if (match) {
+      if (match.key === 'pr_number') {
+        resolved = db.prepare(`SELECT id, pr_number FROM print_requests WHERE pr_number = ?`).get(match.value);
+      } else {
+        // Plant# match — look up most recent active PR for any design with that PLANT#
+        resolved = db.prepare(`
+          SELECT pr.id, pr.pr_number FROM print_requests pr
+          JOIN order_lines ol ON pr.order_line_id = ol.id
+          JOIN designs d ON ol.design_id = d.id
+          WHERE d.plant_number = ? AND pr.status NOT IN ('Closed','Cancelled','Complete')
+          ORDER BY pr.created_at DESC LIMIT 1
+        `).get(match.value);
+      }
+      if (resolved) {
+        woundCreate.print_request_id = resolved.id;
+        woundCreate.auto_match_score = match.confidence;
+        woundCreate.reconciliation_status = match.confidence >= 90 ? 'auto_matched' : 'awaiting_review';
+      }
+    }
+    return NextResponse.json({
+      ok: true,
+      event: 'agent_observed_job',
+      external_job_name: job,
+      origin: 'neostampa_gui',
+      auto_match: match
+        ? {
+            matched_key: match.key,
+            matched_value: match.value,
+            confidence: match.confidence,
+            resolved_to_pr: resolved ? resolved.pr_number : null,
+            decision: resolved
+              ? (match.confidence >= 90 ? 'auto_bound · awaits operator confirm' : 'suggested · operator must confirm')
+              : 'no_match · routes to Reconciliation Queue',
+          }
+        : { decision: 'no_helm_identifier_in_filename · routes to Reconciliation Queue' },
+      would_persist: {
+        insert_into: 'rip_jobs',
+        row: woundCreate,
+      },
+      next_step: resolved
+        ? `Visit /print-requests/${resolved.pr_number} to confirm the binding.`
+        : 'Operator picks the job up from /printer-queue · Reconciliation Queue and clicks Bind to PR (fires manual_associate).',
+      note: 'Prototype mock: validates + auto-matches + returns the would-be write. Production inserts a real rip_jobs row.',
+    }, { status: 200 });
+  }
+
+  // ============================================================
+  // manual_associate — operator binds a Canvas job to a Helm PR
+  // ============================================================
+  if (event === 'manual_associate') {
+    if (!pr) {
+      return NextResponse.json(
+        { error: 'missing_pr', hint: 'event=manual_associate requires pr (target Helm PR number).' },
+        { status: 400 },
+      );
+    }
+    const ripJob = db.prepare(`SELECT id, status, origin, reconciliation_status FROM rip_jobs WHERE external_job_name = ?`).get(job) as any;
+    if (!ripJob) {
+      return NextResponse.json({ error: 'unknown_job', external_job_name: job }, { status: 404 });
+    }
+    const targetPr = db.prepare(`SELECT id, pr_number FROM print_requests WHERE pr_number = ?`).get(pr) as any;
+    if (!targetPr) {
+      return NextResponse.json({ error: 'unknown_pr', pr }, { status: 404 });
+    }
+    return NextResponse.json({
+      ok: true,
+      event: 'manual_associate',
+      rip_job_id: ripJob.id,
+      external_job_name: job,
+      bound_to_pr: targetPr.pr_number,
+      previous_origin: ripJob.origin,
+      previous_reconciliation_status: ripJob.reconciliation_status,
+      would_persist: {
+        update_rip_jobs: {
+          print_request_id: targetPr.id,
+          reconciliation_status: 'manual_associated',
+        },
+        insert_into: 'rip_job_events',
+        row: {
+          rip_job_id: ripJob.id,
+          event_type: 'manual_associate',
+          source: 'manual',
+          details: details ?? `Bound to ${targetPr.pr_number}`,
+        },
+      },
+      note: 'Prototype mock: validates + returns the would-be write. Production UPDATEs rip_jobs + INSERTs the event in a transaction.',
+    }, { status: 200 });
+  }
+
+  // ============================================================
+  // Standard lifecycle events (existing behavior)
+  // ============================================================
+  // Look up the RipJob by external_job_name
   const ripJob = db.prepare(`
     SELECT rj.id, rj.status, rj.print_request_id, rj.retry_count,
            pr.pr_number, pr.id as pr_id

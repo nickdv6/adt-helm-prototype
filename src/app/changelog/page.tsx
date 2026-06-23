@@ -13,6 +13,20 @@ type Entry = {
 const ENTRIES: Entry[] = [
   {
     date: '2026-06-23',
+    version: '0.8',
+    title: 'Canvas-originated jobs — Reconciliation Queue + two-origin model',
+    bullets: [
+      'Real-world fix per Nick: many RIP jobs originate in the NeoStampa Canvas GUI (colorist opens a file, makes adjustments, clicks print) — NOT in Helm as an XML hot-folder drop. Helm now handles both origins.',
+      'Schema: rip_jobs.print_request_id is now NULLABLE; new columns origin (helm | neostampa_gui | unknown), neostampa_job_id (NS-internal ID), auto_match_score (0-100 confidence), reconciliation_status (attributed / awaiting_review / auto_matched / manual_associated / flagged_no_pr).',
+      'Seed: 12 unattributed Canvas-originated jobs added, with realistic NeoStampa filenames — some contain PR-#### (high-confidence auto-match), some PLANT# (medium), some are vague (manual review required), some flagged as internal color-match prints with no PR association.',
+      'API: /api/rip-events gains two new event types — agent_observed_job (agent reports a new NS job, Helm parses the filename for PR-#### or PLANT# and either auto-binds or routes to Reconciliation Queue) and manual_associate (operator binds a NS job to a PR from the queue UI).',
+      'New section on /printer-queue: "NeoStampa Reconciliation Queue" — Canvas-originated jobs awaiting review, with per-row Bind to PR / Flag · no PR actions. Sorted by reconciliation status priority.',
+      'Existing "RIP · NeoStampa Activity" section filtered to origin=helm only — the two queues no longer overlap.',
+      'XML Preview footer + IT/Admin webhook contract card updated with the two-origin model. Live test links for auto-match (95% confidence) vs no-match (Reconciliation Queue) responses.',
+    ],
+  },
+  {
+    date: '2026-06-23',
     version: '0.7',
     title: 'RIP event identity binding — UNIQUE constraint + live /api/rip-events webhook',
     bullets: [
