@@ -6,6 +6,7 @@ import { formatDate, relativeTime } from '@/lib/utils';
 import { Image as ImageIcon, ExternalLink, RotateCcw, Maximize2, ScanLine, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { insertDisplay } from '@/lib/insert-mapping';
 import { RipCardActions } from '@/components/rip-card-actions';
+import { DispatchToRipButton } from '@/components/dispatch-to-rip-button';
 
 // S24 Print Request Detail
 // Surfaces: PR header, parent order, internal proof flow (S23-S32.60),
@@ -331,6 +332,11 @@ export default function PRDetail({ params }: { params: { id: string } }) {
           <Card>
             <CardHeader title="Actions" />
             <div className="px-5 py-3 space-y-2">
+              {/* Dispatch is the most important action when the PR is in the
+                  ready window. Show as primary above other actions. */}
+              {['not_started', 'error'].includes(pr.rip_status) && (
+                <DispatchToRipButton prId={pr.id} prNumber={pr.pr_number} />
+              )}
               <Button variant="secondary" className="w-full justify-start">Reprint (creates child PR)</Button>
               <Button variant="ghost" className="w-full justify-start">Recall RIP (OD-6)</Button>
               <Button variant="ghost" className="w-full justify-start">Edit Profile</Button>

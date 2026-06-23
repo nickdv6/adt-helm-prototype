@@ -13,6 +13,18 @@ type Entry = {
 const ENTRIES: Entry[] = [
   {
     date: '2026-06-23',
+    version: '0.9',
+    title: 'Helm-side dispatcher — POST /api/dispatch-to-rip + PR Detail button',
+    bullets: [
+      'Closes the upstream gap: when a PR is ready_for_rip, the dispatcher endpoint now generates the external_job_name, picks the hot folder (rush lane on Durst for Rush orders), generates the Inèdit XML, and returns the four-write transaction plan (INSERT fabric_outputs + INSERT rip_jobs + UPDATE print_requests + WRITE file to hot folder).',
+      '9-step validation trace returned in the response: PR exists / not cancelled / has printer / dispatchable state / rip_status allows it / not held / strike-off approved (if OD-9 required) / no name collision / hot folder available.',
+      'Reprint collision handling: if a rip_job with the unsuffixed name already exists, appends _R2 / _R3 etc. until UNIQUE. The retry_count on the new row equals the suffix.',
+      'New Dispatch to RIP button on PR Detail Actions card — appears when pr.rip_status = not_started OR error. Opens a modal showing the validation trace, hot folder selection, the four atomic writes, and the generated XML inline (with download).',
+      'Watchdog timer: dispatch schedules a check at +4h. If no print_completed_software event by then, raises EX-RIP-NO-CONFIRM.',
+    ],
+  },
+  {
+    date: '2026-06-23',
     version: '0.8',
     title: 'Canvas-originated jobs — Reconciliation Queue + two-origin model',
     bullets: [

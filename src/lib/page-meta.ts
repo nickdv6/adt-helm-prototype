@@ -48,6 +48,8 @@ export const PAGES: PageMeta[] = [
     category: 'Meta', wave: 'Wave 1', dataSource: 'mock', sourcePath: 'app/changelog/page.tsx' },
   { path: '/api/rip-events', title: 'Webhook API · /api/rip-events', summary: 'Live webhook endpoint that NeoStampa Sync Agents call. GET/POST. Returns the would-be write so Sight Source has a concrete contract.',
     category: 'Meta', wave: 'Wave 1', dataSource: 'live', dataNote: 'Validates + looks up RipJob; persistence mocked on Vercel (read-only FS), real in production.', sourcePath: 'app/api/rip-events/route.ts' },
+  { path: '/api/dispatch-to-rip', title: 'Dispatcher API · /api/dispatch-to-rip', summary: 'Helm-side upstream handoff. POST {pr_id} → validates + generates external_job_name + picks hot folder + builds XML + returns the four-write transaction plan.',
+    category: 'Meta', wave: 'Wave 1', dataSource: 'live', dataNote: 'Live endpoint. Returns generated XML + writes; production runs writes in a transaction.', sourcePath: 'app/api/dispatch-to-rip/route.ts' },
   { path: '/inbox',         title: 'Inbox',                       summary: 'Notification center — N## codes from seed.',
     category: 'Daily', wave: 'Wave 1', dataSource: 'live', sourcePath: 'app/inbox/page.tsx' },
 
