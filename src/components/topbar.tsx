@@ -49,7 +49,13 @@ export function Topbar() {
   function switchTo(roleId: string) {
     const role = ROLES.find((r) => r.id === roleId)!;
     setActiveRoleId(roleId);
-    if (typeof window !== 'undefined') localStorage.setItem('helm.role', roleId);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('helm.role', roleId);
+      // localStorage's 'storage' event only fires across tabs, not within the
+      // same tab. Dispatch a custom event so the role-aware sidebar in this
+      // same tab updates immediately.
+      window.dispatchEvent(new CustomEvent('helm.role.changed', { detail: roleId }));
+    }
     setOpen(false);
     if (pathname !== role.home) router.push(role.home);
   }

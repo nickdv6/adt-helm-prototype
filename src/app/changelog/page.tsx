@@ -13,6 +13,18 @@ type Entry = {
 const ENTRIES: Entry[] = [
   {
     date: '2026-06-23',
+    version: '1.1',
+    title: 'Role-aware sidebar — prioritize nav items by active persona',
+    bullets: [
+      'Sidebar converted to a client component. Reads the active role from localStorage (same key the topbar persona switcher writes to). Items relevant to the current role render at full opacity above the fold; everything else collapses into an expandable "More — all sections" region at the bottom.',
+      'Each NavItem now declares the roles it is primary for. Admin sees everything (no filtering). Other roles see a focused surface — Julio (Print Op) primary view: Print Op Home, PR Dashboard, Printer Queue, Cut Station, Daily Production Dashboard, Exception Center. Diana (Accounting) primary view: Accounting Home, Order Dashboard, Customers. Etc.',
+      'Same-tab role switching: topbar persona picker now dispatches a custom event (helm.role.changed) the sidebar listens for, so role switches feel instant within a single tab. Cross-tab sync still works via the standard storage event.',
+      '"Viewing as [Role]" indicator at the top of the sidebar when not viewing as Admin — explicit cue that the surface is filtered.',
+      'Audited each role\'s primary surface against their role home + their day-to-day tasks; matches the permissions matrix on /settings/roles.',
+    ],
+  },
+  {
+    date: '2026-06-23',
     version: '1.0',
     title: 'NeoStampa integration — vendor risk surface + abstraction layer (caps Phase 1)',
     bullets: [
