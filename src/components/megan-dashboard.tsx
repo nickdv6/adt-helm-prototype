@@ -145,7 +145,7 @@ function DueSoonSection({ prs }: { prs: DueSoonPR[] }) {
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
 
   // Sort state
-  type SortKey = 'promised' | 'assigned' | 'customer' | 'status' | 'priority';
+  type SortKey = 'promised' | 'assigned' | 'customer' | 'status';
   const [sortKey, setSortKey] = useState<SortKey>('promised');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
 
@@ -200,11 +200,6 @@ function DueSoonSection({ prs }: { prs: DueSoonPR[] }) {
         cmp = a.company_name.localeCompare(b.company_name);
       } else if (sortKey === 'status') {
         cmp = a.status.localeCompare(b.status);
-      } else if (sortKey === 'priority') {
-        // Rush first then overdue first
-        const ap = (a.is_rush ? 2 : 0) + ((businessDaysUntil(a.adt_promised_date) ?? 99) < 0 ? 1 : 0);
-        const bp = (b.is_rush ? 2 : 0) + ((businessDaysUntil(b.adt_promised_date) ?? 99) < 0 ? 1 : 0);
-        cmp = bp - ap;
       }
       return cmp * dirMul;
     });
@@ -218,7 +213,7 @@ function DueSoonSection({ prs }: { prs: DueSoonPR[] }) {
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir(sortDir === 'asc' ? 'desc' : 'asc');
-    else { setSortKey(key); setSortDir(key === 'priority' ? 'desc' : 'asc'); }
+    else { setSortKey(key); setSortDir('asc'); }
   }
 
   return (
@@ -271,12 +266,11 @@ function DueSoonSection({ prs }: { prs: DueSoonPR[] }) {
               <th className="text-right px-3 py-2.5">Qty</th>
               <SortHeader label="Promised" col="promised" sortKey={sortKey} sortDir={sortDir} onClick={() => toggleSort('promised')} align="left" />
               <th className="text-left px-3 py-2.5">Due In</th>
-              <SortHeader label="Priority" col="priority" sortKey={sortKey} sortDir={sortDir} onClick={() => toggleSort('priority')} />
             </tr>
           </thead>
           <tbody>
             {visible.length === 0 && (
-              <tr><td colSpan={11} className="px-3 py-12 text-center text-sm text-gray-400 italic">No print requests match the current filters.</td></tr>
+              <tr><td colSpan={10} className="px-3 py-12 text-center text-sm text-gray-400 italic">No print requests match the current filters.</td></tr>
             )}
             {visible.map((p) => {
               const d = businessDaysUntil(p.adt_promised_date);
@@ -306,13 +300,6 @@ function DueSoonSection({ prs }: { prs: DueSoonPR[] }) {
                   <td className="px-3 py-2 text-xs">{p.adt_promised_date ? formatDate(p.adt_promised_date) : '—'}</td>
                   <td className="px-3 py-2 text-xs">
                     <DueInTag days={d} promisedLabel={promised.label} />
-                  </td>
-                  <td className="px-3 py-2 text-xs">
-                    <div className="flex items-center gap-1">
-                      {p.is_rush ? <Tag color="red">Rush</Tag> : null}
-                      {isOverdue ? <Tag color="red">Overdue</Tag> : null}
-                      {!p.is_rush && !isOverdue && isToday ? <Tag color="yellow">Today</Tag> : null}
-                    </div>
                   </td>
                 </tr>
               );
@@ -383,7 +370,6 @@ function OrdersInProductionSection({ orders, prsByOrder }: { orders: OrderRow[];
               <th className="w-8 px-2"></th>
               <th className="text-left px-3 py-2.5">Order #</th>
               <th className="text-left px-3 py-2.5">Customer</th>
-              <th className="text-left px-3 py-2.5">Roadmap</th>
               <th className="text-left px-3 py-2.5">Status</th>
               <th className="text-right px-3 py-2.5">PR Count</th>
               <th className="text-left px-3 py-2.5">Earliest Promised</th>
@@ -393,7 +379,7 @@ function OrdersInProductionSection({ orders, prsByOrder }: { orders: OrderRow[];
           </thead>
           <tbody>
             {orders.length === 0 && (
-              <tr><td colSpan={9} className="px-3 py-12 text-center text-sm text-gray-400 italic">No orders currently in production.</td></tr>
+              <tr><td colSpan={8} className="px-3 py-12 text-center text-sm text-gray-400 italic">No orders currently in production.</td></tr>
             )}
             {orders.map((o) => {
               const isOpen = expanded.has(o.id);
@@ -410,7 +396,6 @@ function OrdersInProductionSection({ orders, prsByOrder }: { orders: OrderRow[];
                       <Link href={`/orders/${o.id}`} onClick={(e) => e.stopPropagation()} className="font-mono text-xs font-semibold text-navy-700 hover:underline">{o.order_number}</Link>
                     </td>
                     <td className="px-3 py-2.5 text-xs">{o.company_name}</td>
-                    <td className="px-3 py-2.5 font-mono text-[10px] text-gray-600">{o.roadmap ?? '—'}</td>
                     <td className="px-3 py-2.5"><StatusPill status={o.status} /></td>
                     <td className="px-3 py-2.5 text-right font-mono text-xs">{o.pr_count}{prs.length > 1 && <Tag color="blue">multi</Tag>}</td>
                     <td className="px-3 py-2.5 text-xs">{formatDate(o.earliest_promised)}</td>
@@ -424,7 +409,7 @@ function OrdersInProductionSection({ orders, prsByOrder }: { orders: OrderRow[];
                   </tr>
                   {isOpen && (
                     <tr className="bg-gray-50/60">
-                      <td colSpan={9} className="px-0 py-0">
+                      <td colSpan={8} className="px-0 py-0">
                         <div className="border-t border-gray-200 px-12 py-3">
                           <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-1.5">
                             Print Requests ({prs.length}) — one row per PR
