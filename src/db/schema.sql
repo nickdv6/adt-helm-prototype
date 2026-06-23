@@ -45,6 +45,13 @@ CREATE TABLE IF NOT EXISTS companies (
   primary_csr_user_id INTEGER,
   sales_rep_user_id INTEGER,
   hubspot_owner_email TEXT,
+  -- Customer Automation Profile fields (Phase 1.11 minimum surface — full profile is Wave 2).
+  -- These let the Strike-Off Decision Engine skip the strike entirely for pre-approved customer
+  -- arrangements like St Frank's Click-and-Print. Without these flags, every new colorway
+  -- forces a strike even when contractually unnecessary.
+  skip_strike_for_new_colorways INTEGER NOT NULL DEFAULT 0,   -- e.g. St Frank: new colorway on existing design = direct to production
+  skip_strike_for_reorders INTEGER NOT NULL DEFAULT 1,        -- Default: reorders skip strike if approved hash exists
+  approval_freshness_days INTEGER NOT NULL DEFAULT 365,       -- Approved hashes expire after this many days → re-qualification required
   is_legacy INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (primary_csr_user_id) REFERENCES users(id),
@@ -146,7 +153,13 @@ CREATE TABLE IF NOT EXISTS printers (
   status TEXT NOT NULL DEFAULT 'idle', -- idle | running | maintenance
   throughput_yards_per_hour REAL,
   throughput_notes TEXT, -- Free-text for width-dependent throughput (e.g. Durst Alpha 330: 150 @ 126", 240 @ 62")
-  last_maintenance_at TEXT
+  last_maintenance_at TEXT,
+  -- ICC profile version tracking (Phase 1.11) for the Strike-Off Decision Engine.
+  -- When a strike is approved we snapshot the ICC version onto artwork_files.icc_profile_version_when_approved.
+  -- When a reorder comes in, the decision engine compares this current value to the approved snapshot.
+  -- Mismatch = re-qualification strike-off required (substrate may render differently under a new ICC).
+  current_icc_profile_version TEXT,
+  icc_profile_updated_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS print_profiles (
@@ -217,10 +230,25 @@ CREATE TABLE IF NOT EXISTS artwork_files (
   height_inches REAL,
   file_size_kb INTEGER,
   thumbnail_path TEXT,
+  -- Hash-locked promotion workflow (Phase 1.11). The SHA256 of the file bytes
+  -- is the canonical identifier — filenames lie, hashes don't. Agent watcher
+  -- captures this on every save event so version history is automatic.
+  file_hash TEXT,                              -- SHA256 hex of the file bytes; cryptographic guarantee of identity
+  working_path TEXT,                           -- Where the colorist saved it during work, before promotion (vs nas_path = canonical archive)
+  colorist_user_id INTEGER,                    -- Which colorist saved this version (from filesystem owner / NeoStampa session)
+  comment TEXT,                                -- Colorist note (e.g. "tightened repeat 0.5cm" or "tweaked navy on channel 3")
+  is_strike_off_candidate INTEGER NOT NULL DEFAULT 0,  -- Colorist clicked "Submit for Strike-Off" on this row
+  promoted_at TEXT,                            -- When it was submitted as a strike-off candidate
+  approved_at TEXT,                            -- When customer approved the strike-off that printed this hash
+  approved_by_strike_off_id INTEGER,           -- Which strike-off approval bound this hash
   FOREIGN KEY (design_id) REFERENCES designs(id),
   FOREIGN KEY (colorway_id) REFERENCES colorways(id),
-  FOREIGN KEY (submitted_by_user_id) REFERENCES users(id)
+  FOREIGN KEY (submitted_by_user_id) REFERENCES users(id),
+  FOREIGN KEY (colorist_user_id) REFERENCES users(id),
+  FOREIGN KEY (approved_by_strike_off_id) REFERENCES strike_offs(id)
 );
+CREATE INDEX IF NOT EXISTS idx_artwork_files_design ON artwork_files(design_id, colorway_id);
+CREATE INDEX IF NOT EXISTS idx_artwork_files_hash ON artwork_files(file_hash);
 
 -- ============================================================
 -- PRICING RULE
@@ -396,6 +424,11 @@ CREATE TABLE IF NOT EXISTS print_requests (
   external_job_name TEXT,
   fabric_output_id INTEGER,                          -- Parent QR record (one printed run = one FabricOutput)
   current_rip_job_id INTEGER,                        -- The active/latest RipJob for this PR
+  -- The canonical artwork file the dispatcher uses when generating the XML.
+  -- Set when a strike-off is approved (hash-locked to the version the customer
+  -- signed off on) or when the colorist promotes a draft direct to production.
+  -- Helm-side dispatcher uses artwork_files.nas_path for this id, not "the most recent file".
+  production_artwork_file_id INTEGER,
   rip_status TEXT NOT NULL DEFAULT 'not_started',    -- 12-state RIP lifecycle (see rip_jobs.status comments)
   rip_retry_count INTEGER NOT NULL DEFAULT 0,
   rip_last_event_at TEXT,
@@ -576,8 +609,26 @@ CREATE TABLE IF NOT EXISTS strike_offs (
   customer_change_notes TEXT,
   approval_token TEXT,
   approval_sent_at TEXT,
+  -- Phase 1.11 hash-locked workflow.
+  -- change_severity disambiguates "Approve with Changes" — minor tweaks go DIRECT to production
+  -- with a new hash; substantive changes trigger a new strike-off cycle. Without this field,
+  -- every "Approve with Changes" forces a redundant strike-off even for 2-shade navy tweaks.
+  change_severity TEXT,                            -- NULL | minor_color_tweak | substantive_change
+  -- Multi-variant comparison strike-off: colorist promotes 2-4 versions on one print run so
+  -- customer can pick the winner. variant_artwork_file_ids is a JSON array of artwork_files.id
+  -- in the order they appear on the printed fabric. is_multi_variant=1 with 2+ ids.
+  is_multi_variant INTEGER NOT NULL DEFAULT 0,
+  variant_artwork_file_ids TEXT,                   -- JSON array, e.g. [421, 422, 423]
+  variant_winner_artwork_file_id INTEGER,          -- After customer picks, which variant won
+  -- ICC snapshot at the time of approval (Phase 1.11). Used by the decision engine to detect
+  -- "ICC drift" — if the printer's current ICC differs from this snapshot, re-qualification
+  -- strike-off is required even though the design+colorway was previously approved.
+  icc_profile_version_at_approval TEXT,
+  printer_id_at_approval INTEGER,                  -- The printer the strike was run on (must match production printer)
   FOREIGN KEY (print_request_id) REFERENCES print_requests(id),
-  FOREIGN KEY (artwork_file_id) REFERENCES artwork_files(id)
+  FOREIGN KEY (artwork_file_id) REFERENCES artwork_files(id),
+  FOREIGN KEY (variant_winner_artwork_file_id) REFERENCES artwork_files(id),
+  FOREIGN KEY (printer_id_at_approval) REFERENCES printers(id)
 );
 
 -- ============================================================

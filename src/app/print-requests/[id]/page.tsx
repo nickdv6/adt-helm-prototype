@@ -7,6 +7,7 @@ import { Image as ImageIcon, ExternalLink, RotateCcw, Maximize2, ScanLine, Alert
 import { insertDisplay } from '@/lib/insert-mapping';
 import { RipCardActions } from '@/components/rip-card-actions';
 import { DispatchToRipButton } from '@/components/dispatch-to-rip-button';
+import { ColorMatchWorkflowCard } from '@/components/color-match-workflow-card';
 
 // S24 Print Request Detail
 // Surfaces: PR header, parent order, internal proof flow (S23-S32.60),
@@ -215,6 +216,9 @@ export default function PRDetail({ params }: { params: { id: string } }) {
               </div>
             </Card>
           )}
+          {/* Color Match · Version History (Phase 1.11 — hash-locked promotion workflow) */}
+          <ColorMatchWorkflowCard prId={pr.id} />
+
           {/* If no RIP job yet (PR pre-rip), show traveler payload only */}
           {!ripJob && pr.traveler_composite_status && pr.traveler_composite_status !== 'not_required' && (
             <Card>

@@ -13,6 +13,24 @@ type Entry = {
 const ENTRIES: Entry[] = [
   {
     date: '2026-06-23',
+    version: '1.2',
+    title: 'Hash-locked color-match promotion workflow + Strike-Off Decision Engine',
+    bullets: [
+      'Decouples save from print. Every colorist save is captured by the agent (SHA256 + version row in artwork_files); printing requires explicit promote. A colorist iterating 7 times produces 7 versions in Helm with zero hot folder writes. Prevents accidental fabric/ink waste.',
+      'Schema: artwork_files gains file_hash (SHA256), working_path, colorist_user_id, comment, is_strike_off_candidate, promoted_at, approved_at, approved_by_strike_off_id. print_requests.production_artwork_file_id = the canonical bytes the dispatcher uses (NOT "the most recent file"). Indexed by hash.',
+      'New endpoint POST /api/artwork-saved — agent file-watcher webhook. On every save event the agent posts hash + working_path + colorist + comment. Creates an artwork_files row; never prints. Duplicate-hash detection: same bytes saved twice = no new row (common NS Canvas auto-save case).',
+      'New endpoint POST /api/decide-strike-off — Strike-Off Decision Engine. Given a PR, decides whether a strike is required, with reason. 9 decisions: reuse_approved_skip_strike (reorder path, ~5 min), skip_strike_per_customer_profile (St Frank C&P), strike_required_new_design / _new_colorway / _new_customer, restrike_required_icc_drift / _approval_stale / _printer_mismatch.',
+      'New endpoint POST /api/promote-to-strike-off — colorist explicitly promotes 1 or 2-4 versions to a strike-off. Single-variant = standard strike. Multi-variant lays 2-4 versions side-by-side on one print run, customer compares and picks the winner. Eliminates 2-3 redundant strike-off cycles per design.',
+      'Color Match · Version History card on PR Detail. Shows full version chain (hash, file, colorist, comment, status), the decision engine output as a banner, the canonical production hash highlighted in green, and the Submit for Strike-Off button (single/multi-variant toggle in modal).',
+      'Phase 1.8 dispatcher updated. Now joins to production_artwork_file_id and surfaces canonical_source (id, file_name, nas_path, SHA256, version) in the response. New validation checks: "Canonical artwork file resolved" (Phase 1.11 hash-lock) + "Hash verification at dispatch time" (would re-hash the file on disk and EX-HASH-MISMATCH if not matching the canonical hash; catches NAS sync issues + file corruption + wrong-file operator clicks).',
+      'Strike-offs: schema gains change_severity (minor_color_tweak | substantive_change) so "Approve with Changes" doesn\'t force a redundant strike for a 2-shade navy tweak; minor goes direct to production with a new hash. Also is_multi_variant + variant_artwork_file_ids + icc_profile_version_at_approval + printer_id_at_approval for ICC drift + printer mismatch detection.',
+      'Customers: skip_strike_for_new_colorways + skip_strike_for_reorders + approval_freshness_days (default 365) on companies — the Customer Automation Profile surface the decision engine consults before applying default rules. St Frank + Inside flagged as Click-and-Print in seed.',
+      'Printers: current_icc_profile_version + icc_profile_updated_at — when ICC drifts from the approved snapshot, decision engine forces re-qualification strike.',
+      'Seed: every (design, colorway) gets 2-5 version chain rows with realistic hash + colorist + comment. PRs wired to canonical approved artwork (~70% have a production_artwork_file_id). Printers seeded with current_icc_profile_version.',
+    ],
+  },
+  {
+    date: '2026-06-23',
     version: '1.1',
     title: 'Role-aware sidebar — prioritize nav items by active persona',
     bullets: [

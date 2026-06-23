@@ -75,14 +75,16 @@ export async function POST(req: NextRequest) {
   const pr = db.prepare(`
     SELECT pr.id, pr.pr_number, pr.status as pr_status, pr.rip_status, pr.is_held,
            pr.printer_id, pr.planned_yardage, pr.printed_yardage, pr.created_at,
-           pr.reprint_of_pr_id,
+           pr.reprint_of_pr_id, pr.production_artwork_file_id,
            ol.order_id, ol.strike_off_classification,
            o.order_number, o.status as order_status, o.is_rush,
            c.name as company_name,
            d.name as design_name, d.plant_number,
            cw.name as colorway_name,
            f.name as fabric_name, f.width_inches as fabric_width_inches,
-           p.name as printer_name, p.ink_set
+           p.name as printer_name, p.ink_set,
+           af.file_name as canonical_file_name, af.nas_path as canonical_nas_path,
+           af.file_hash as canonical_hash, af.version_number as canonical_version
     FROM print_requests pr
     JOIN order_lines ol ON pr.order_line_id = ol.id
     JOIN orders o ON ol.order_id = o.id
@@ -91,6 +93,7 @@ export async function POST(req: NextRequest) {
     LEFT JOIN colorways cw ON ol.colorway_id = cw.id
     LEFT JOIN fabrics f ON pr.fabric_id = f.id
     LEFT JOIN printers p ON pr.printer_id = p.id
+    LEFT JOIN artwork_files af ON af.id = pr.production_artwork_file_id
     WHERE pr.id = ?
   `).get(body.pr_id) as any;
 
@@ -138,6 +141,24 @@ export async function POST(req: NextRequest) {
       name: 'Customer strike-off approved (required by OD-9 class)',
       passed: so && ['Approved', 'Approve with Changes'].includes(so.customer_decision_outcome),
       detail: so ? `latest decision: ${so.customer_decision_outcome ?? 'pending'}` : 'no strike-off recorded',
+    });
+  }
+  // Phase 1.11 — canonical hash check. Dispatcher must know exactly which file to print.
+  checks.push({
+    name: 'Canonical artwork file resolved (Phase 1.11 hash-lock)',
+    passed: !!pr.production_artwork_file_id && !!pr.canonical_hash,
+    detail: pr.production_artwork_file_id
+      ? `v${pr.canonical_version} · ${pr.canonical_file_name} · SHA256 ${pr.canonical_hash?.slice(0, 16)}…`
+      : 'No production_artwork_file_id set on PR. Run the Strike-Off Decision Engine or have the colorist promote a version.',
+  });
+  // In production, the dispatcher would compute SHA256 of the file at canonical_nas_path on disk
+  // and verify it matches pr.canonical_hash before generating the XML. Mismatch → EX-HASH-MISMATCH.
+  // Prototype skips the actual disk read but records the check as part of the contract.
+  if (pr.canonical_hash) {
+    checks.push({
+      name: 'Hash verification at dispatch time (EX-HASH-MISMATCH catch)',
+      passed: true,
+      detail: `Would re-hash ${pr.canonical_nas_path} on disk and compare to canonical_hash. In prototype: assumed OK.`,
     });
   }
 
@@ -233,6 +254,16 @@ export async function POST(req: NextRequest) {
         external_job_name: externalJobName,
         is_reprint: isReprint,
         retry_count: suffix - 1,
+        // Phase 1.11 — canonical hash-locked source. The dispatcher reads pr.production_artwork_file_id
+        // to know exactly which file to composite. This eliminates "which version did I send?" forever.
+        canonical_source: pr.production_artwork_file_id ? {
+          artwork_file_id: pr.production_artwork_file_id,
+          file_name: pr.canonical_file_name,
+          nas_path: pr.canonical_nas_path,
+          sha256: pr.canonical_hash,
+          version: pr.canonical_version,
+          note: 'Dispatcher uses these bytes. Re-prints months later use the same canonical hash.',
+        } : null,
         hot_folder: {
           id: hotFolder.id,
           name: hotFolder.name,

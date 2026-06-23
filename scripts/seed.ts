@@ -300,13 +300,32 @@ const vpnsByCustomerName: Record<string, string[]> = {
   'Havenly':  ['IH-CYP-PIL-18', 'IH-CYP-PIL-22'],
 };
 
-console.log('Seeding artwork files (PLANT#_DESIGN_COLORWAY_VERSION)...');
+console.log('Seeding artwork files (PLANT#_DESIGN_COLORWAY_VERSION) with version chains + hash...');
+// Phase 1.11: every save = one row, with SHA256 hash + colorist + working_path + comment.
+// Version chain demonstrates the iteration workflow: Draft saves → Strike-Off candidate → Approved.
+// Each design+colorway gets 2-5 versions so the Color Match card has a real history to render.
 const insArtwork = db.prepare(`
   INSERT INTO artwork_files (design_id, colorway_id, version_number, file_name, nas_path,
     status, is_original, date_received, submitted_by_user_id, dpi, color_profile,
-    width_inches, height_inches, file_size_kb)
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    width_inches, height_inches, file_size_kb,
+    file_hash, working_path, colorist_user_id, comment,
+    is_strike_off_candidate, promoted_at, approved_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `);
+const COLORIST_COMMENTS = [
+  'Initial intake from customer file',
+  'Tightened repeat 0.5cm',
+  'Tweaked navy on channel 3',
+  'Bumped saturation +8%',
+  'Adjusted ICC for JP7',
+  'Sharpened edges on motif',
+  'Re-separated reds vs oranges',
+  'Aligned repeat to fabric width',
+  'Final color match per customer note',
+  'Quick fix after strike-off review',
+];
+// Fake SHA256 — deterministic, hex-like. Real workflow: agent computes via `sha256sum` on save.
+const fakeHash = () => faker.string.hexadecimal({ length: 64, casing: 'lower', prefix: '' });
 const ARTWORK_STATUSES = ['Approved', 'Approved', 'Approved', 'Pending Approval', 'Draft', 'Archived'];
 const designsWithCo = db.prepare(`SELECT d.id, d.plant_number, d.name, d.company_id FROM designs d`).all() as any[];
 const allColorwaysByDesign = new Map<number, { id: number; name: string }[]>();
@@ -317,11 +336,19 @@ db.prepare('SELECT id, design_id, name FROM colorways').all().forEach((c: any) =
 designsWithCo.forEach((d) => {
   const cws = allColorwaysByDesign.get(d.id) ?? [{ id: 0, name: 'default' }];
   cws.forEach((cw) => {
-    const versionCount = faker.number.int({ min: 1, max: 3 });
+    const versionCount = faker.number.int({ min: 2, max: 5 });
     for (let v = 1; v <= versionCount; v++) {
-      const status = v === versionCount ? ARTWORK_STATUSES[faker.number.int({ min: 0, max: 2 })] : 'Archived';
+      // Latest version gets a "live" status; earlier ones archive
+      const isFinal = v === versionCount;
+      const status = isFinal ? ARTWORK_STATUSES[faker.number.int({ min: 0, max: 2 })] : 'Archived';
       const fileName = `${d.plant_number}_${d.name.replace(/\s+/g, '-')}_${cw.name.replace(/\s+/g, '-')}_v${v}.tiff`;
       const nasPath = `\\\\nas\\artwork\\${d.plant_number}\\${fileName}`;
+      const workingPath = `\\\\nas\\artwork\\${d.plant_number}\\${cw.name.replace(/\s+/g, '-')}\\working\\${fileName}`;
+      // Approved/strike-off rows get promoted_at + approved_at timestamps to show the workflow state
+      const promotedAt = (status === 'Approved' || status === 'Pending Approval') && isFinal
+        ? faker.date.recent({ days: 30 }).toISOString() : null;
+      const approvedAt = status === 'Approved' && isFinal
+        ? faker.date.recent({ days: 14 }).toISOString() : null;
       insArtwork.run(
         d.id,
         cw.id || null,
@@ -337,6 +364,13 @@ designsWithCo.forEach((d) => {
         faker.number.float({ min: 24, max: 60, fractionDigits: 1 }),
         faker.number.float({ min: 24, max: 36, fractionDigits: 1 }),
         faker.number.int({ min: 1200, max: 48000 }),
+        fakeHash(),
+        workingPath,
+        userByRole['colorist'],
+        v === 1 ? COLORIST_COMMENTS[0] : faker.helpers.arrayElement(COLORIST_COMMENTS.slice(1)),
+        promotedAt ? 1 : 0,
+        promotedAt,
+        approvedAt,
       );
     }
   });
@@ -648,6 +682,38 @@ for (let i = 0; i < totalOrders; i++) {
     }
   }
 }
+
+// Phase 1.11: backfill print_requests.production_artwork_file_id — for each PR, find the
+// Approved artwork for its design+colorway. The dispatcher (Phase 1.8) reads this field
+// to know exactly which canonical file to print (no "most recent file" guessing).
+console.log('Wiring print_requests.production_artwork_file_id to approved artwork hashes...');
+const prsForWiring = db.prepare(`
+  SELECT pr.id, ol.design_id, ol.colorway_id
+  FROM print_requests pr
+  JOIN order_lines ol ON ol.id = pr.order_line_id
+`).all() as any[];
+const findApprovedFile = db.prepare(`
+  SELECT id FROM artwork_files
+  WHERE design_id = ? AND (colorway_id = ? OR (colorway_id IS NULL AND ? IS NULL))
+    AND status = 'Approved'
+  ORDER BY version_number DESC LIMIT 1
+`);
+const setProductionFile = db.prepare(`UPDATE print_requests SET production_artwork_file_id = ? WHERE id = ?`);
+let wiredCount = 0;
+prsForWiring.forEach((pr) => {
+  const f = findApprovedFile.get(pr.design_id, pr.colorway_id, pr.colorway_id) as any;
+  if (f) { setProductionFile.run(f.id, pr.id); wiredCount++; }
+});
+console.log(`  -> wired ${wiredCount}/${prsForWiring.length} PRs to an approved artwork file`);
+
+// Phase 1.11: set ICC profile versions on printers so the decision engine has something to compare
+const setPrinterIcc = db.prepare(`UPDATE printers SET current_icc_profile_version = ?, icc_profile_updated_at = ? WHERE id = ?`);
+db.prepare('SELECT id FROM printers').all().forEach((p: any, i: number) => {
+  setPrinterIcc.run(`ICC-${faker.date.recent({ days: 60 }).toISOString().slice(0,10)}-r${i+1}`, faker.date.recent({ days: 60 }).toISOString(), p.id);
+});
+
+// Phase 1.11: flag a couple of pre-approved customers to skip strike on new colorways (e.g. St Frank Click-and-Print)
+db.prepare(`UPDATE companies SET skip_strike_for_new_colorways = 1 WHERE name IN ('St Frank', 'Inside')`).run();
 
 console.log('Seeding strike-offs (~60 across PRs in strike-off-bearing roadmaps)...');
 const insStrike = db.prepare(`
