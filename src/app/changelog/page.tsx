@@ -13,6 +13,18 @@ type Entry = {
 const ENTRIES: Entry[] = [
   {
     date: '2026-06-23',
+    version: '1.3',
+    title: 'Receiving Home — remove Expected Inbound mock; promote Receive Fabric to primary CTA',
+    bullets: [
+      'Removed the inline-mock "Expected Inbound" table (INB-3104 MillCo, INB-3105 St Frank cust-supply, etc.). Nothing real was feeding it — no inbound_shipments / purchase_orders / suppliers tables yet. Risked Ali reading it as a real-data surface.',
+      'Promoted "Receive Fabric" to the centerpiece of the page: large icon tile + headline + descriptive sub-text + a big primary "Start a New Receipt" CTA. Header-right button kept for consistency.',
+      'KPIs pivoted from inbound-side (Inbound today, This week) to received-side (Received today, Received this week, Failed last 7d).',
+      'Recent receipts activity table kept — gives Tomás past-action verification context until a received_lots table lands.',
+      'The /receiving-home/receive form, the Receiving role + permissions matrix entry, Tomás persona, sidebar entry, and tour link all stay. The intake flow is the real ADT-relevant capability and is preserved.',
+    ],
+  },
+  {
+    date: '2026-06-23',
     version: '1.2',
     title: 'Hash-locked color-match promotion workflow + Strike-Off Decision Engine',
     bullets: [
