@@ -369,8 +369,8 @@ function NeoStampaAgentsPanel() {
   return (
     <Card>
       <CardHeader
-        title="NeoStampa Sync Agents"
-        subtitle="Local services on each RIP machine — watch hot folders, monitor logs, report events back to Helm. Heartbeat every 30s."
+        title="NeoStampa Sync Agents · Inèdit neoRipEngine"
+        subtitle="Local Windows services running neoRipEngineCGI on each RIP machine — watch hot folders, post printingStart/End/Abort notifications back to Helm per Inèdit spec 4.23.0. Heartbeat every 30s."
         action={<Tag color={agents.some((a) => a.status !== 'online') ? 'yellow' : 'green'}>{agents.filter((a) => a.status === 'online').length}/{agents.length} online</Tag>}
       />
       <div className="overflow-x-auto">
@@ -414,9 +414,16 @@ function NeoStampaAgentsPanel() {
           </tbody>
         </table>
       </div>
-      <div className="px-4 py-2 border-t border-gray-100 text-[11px] text-gray-500 italic">
-        Agent code packaged as a Windows service. Sends event POSTs to Helm’s /api/rip-events endpoint.
-        Future requirements for full Inèdit integration: API access, log file access, queue access, folder monitoring, job metadata, printer status, meter tracking, ink usage, archive status.
+      <div className="px-4 py-2 border-t border-gray-100 text-[11px] text-gray-500 italic space-y-1">
+        <div>
+          Agent code packaged as a Windows service wrapping <code className="font-mono">neoRipEngineCGI</code>.
+          Each printingStart / printingEnd / printingAbort / printingMessage Notification URL in the job ticket posts
+          back to Helm at <code className="font-mono">/api/rip-events</code> → writes a row to <code className="font-mono">rip_job_events</code>.
+        </div>
+        <div>
+          Reference: <span className="font-semibold">Inèdit neoRipEngine 4.23.0</span> · Job ticket structure §Job ticket (p.4) ·
+          Notifications §Notifications (p.85) · CGI flags §neoRipEngineCGI (p.109). Job export uses the <code className="font-mono">.xjb</code> bundle format via <code className="font-mono">-exportjob</code>.
+        </div>
       </div>
     </Card>
   );

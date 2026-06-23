@@ -5,6 +5,7 @@ import { Card, CardHeader, StatusPill, Tag, Button } from '@/components/ui';
 import { formatDate, relativeTime } from '@/lib/utils';
 import { Image as ImageIcon, ExternalLink, RotateCcw, Maximize2, ScanLine, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { insertDisplay } from '@/lib/insert-mapping';
+import { RipCardActions } from '@/components/rip-card-actions';
 
 // S24 Print Request Detail
 // Surfaces: PR header, parent order, internal proof flow (S23-S32.60),
@@ -125,11 +126,29 @@ export default function PRDetail({ params }: { params: { id: string } }) {
                 title="RIP · NeoStampa Activity"
                 subtitle={`External job: ${ripJob.external_job_name}`}
                 action={
-                  ripJob.status === 'error'
-                    ? <Button size="sm" variant="ghost"><RotateCcw className="w-3.5 h-3.5 mr-1" />Retry job</Button>
-                    : ripJob.is_held
-                    ? <Button size="sm" variant="ghost">Release Hold</Button>
-                    : null
+                  <RipCardActions
+                    status={ripJob.status}
+                    isHeld={!!ripJob.is_held}
+                    xmlInput={{
+                      prNumber: pr.pr_number,
+                      prId: pr.id,
+                      externalJobName: ripJob.external_job_name,
+                      fabricOutputPayload: ripJob.fo_payload,
+                      customerName: pr.company_name,
+                      designName: pr.design_name,
+                      plantNumber: pr.plant_number,
+                      colorwayName: pr.colorway_name,
+                      fabricName: pr.fabric_name,
+                      fabricWidthIn: null,
+                      printWidthIn: null,
+                      printedYards: pr.printed_yardage ?? pr.planned_yardage,
+                      printerName: pr.printer_name ?? 'Unknown',
+                      inkSet: pr.ink_set ?? 'Pigment',
+                      iccProfileFile: null,
+                      hotFolderPath: ripJob.hot_folder_path ?? '',
+                      agentName: ripJob.agent_name ?? 'RIP-Bay-A',
+                    }}
+                  />
                 }
               />
               <div className="px-5 py-3 grid grid-cols-2 gap-4 text-sm">

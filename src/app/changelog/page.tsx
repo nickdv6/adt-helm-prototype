@@ -12,6 +12,17 @@ type Entry = {
 
 const ENTRIES: Entry[] = [
   {
+    date: '2026-06-23',
+    version: '0.6',
+    title: 'NeoStampa XML preview — built against the real Inèdit spec',
+    bullets: [
+      'New NeoStampaXmlPreview component generates a complete job ticket XML per Inèdit neoRipEngine 4.23.0 spec — Job/Sources/Layout/Page/Objects/Transformations/Output/Notifications/RapportInfo all match the actual element shape Inèdit defines.',
+      'PR Detail · RIP·NeoStampa card: new "View XML" button opens a modal showing the actual XML that would be generated for that PR, with Copy + Download .xml + Close. Generated client-side from the PR data so each PR shows its own deterministic ticket.',
+      'XML uses real ADT NAS paths, real PLANT# / design / colorway / fabric in the Source URLs, the printer-specific ICC profile in <ConvertProfile> + <OutputProfile>, textile RapportInfo for pattern repeat, and Notification URLs that POST back to /api/rip-events for printingStart/End/Abort/Message events.',
+      'IT/Admin NeoStampa panel terminology updated to match Inèdit: agents run neoRipEngineCGI as a Windows service, cite the spec section + page numbers for Notifications + CGI flags, mention .xjb job-export format.',
+    ],
+  },
+  {
     date: '2026-06-22',
     version: '0.5',
     title: 'NeoStampa Sync — Phase 1 foundation',
