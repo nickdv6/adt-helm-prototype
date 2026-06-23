@@ -4,7 +4,7 @@
 import Link from 'next/link';
 import { Info } from 'lucide-react';
 
-const VERSION = '0.9';
+const VERSION = '1.0';
 // Bump on each major review milestone. Used to communicate to Ali that
 // the prototype moved between sessions.
 

@@ -13,6 +13,18 @@ type Entry = {
 const ENTRIES: Entry[] = [
   {
     date: '2026-06-23',
+    version: '1.0',
+    title: 'NeoStampa integration — vendor risk surface + abstraction layer (caps Phase 1)',
+    bullets: [
+      'Schema: hot_folders.rip_target (default \'inedit_neostampa\') + rip_jobs.xml_spec_version (default \'4.23.0\'). Forward compat for swapping RIP backends per-printer + tracking which spec each XML was built against so in-flight jobs continue under their original version when Inèdit upgrades roll out.',
+      'New "RIP Backend · Vendor Risk & Mitigation" panel on /it-admin laying out: what\'s pinned to Inèdit (XML element shape, notification URL format, RapportInfo, CGI flags) and where each pin lives in code — and what\'s NOT pinned (external_job_name is Helm\'s convention, rip_jobs lives in Helm\'s DB, QR scan = ground truth, three inbound channels, rip_target column allows config-only swap).',
+      '7-step runbook for when Inèdit ships a spec change (read release notes → update buildNeoStampaXml → bump default xml_spec_version → in-flight rows continue under original spec → update agent parser → run CI → staged rollout).',
+      'Fallback options if Inèdit goes EOL: EFI Fiery / ColorGate Productionserver / Caldera GrandRIP+ all use similar XML job-ticket models. .xjb archives preserve history. PR Detail + Reconciliation Queue + dispatcher API are vendor-independent.',
+      'Caps Phase 1: NeoStampa integration is now end-to-end complete — Helm-side dispatcher (1.8) → XML drop to hot folder → Inèdit RIP/print → agent reports events → /api/rip-events updates Helm → physical QR scan promotes to ground truth → all denormalized to print_requests. Two origins handled (Helm + Canvas) + Reconciliation Queue + vendor risk documented.',
+    ],
+  },
+  {
+    date: '2026-06-23',
     version: '0.9',
     title: 'Helm-side dispatcher — POST /api/dispatch-to-rip + PR Detail button',
     bullets: [

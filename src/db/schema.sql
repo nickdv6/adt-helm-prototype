@@ -422,6 +422,11 @@ CREATE TABLE IF NOT EXISTS hot_folders (
   is_active INTEGER NOT NULL DEFAULT 1,
   neostampa_agent_id INTEGER,                        -- which agent watches this folder
   is_rush_lane INTEGER NOT NULL DEFAULT 0,
+  -- Vendor abstraction: which RIP product this hot folder feeds. Today: 'inedit_neostampa'.
+  -- Future adapters could target 'efi_fiery' | 'colorgate' | 'caldera' | 'inhouse_rip'.
+  -- The dispatcher dispatches via the adapter matching this value — so swapping vendors
+  -- on a single printer is a config change, not a code change.
+  rip_target TEXT NOT NULL DEFAULT 'inedit_neostampa',
   FOREIGN KEY (printer_id) REFERENCES printers(id)
 );
 
@@ -493,6 +498,11 @@ CREATE TABLE IF NOT EXISTS rip_jobs (
   -- auto-match (filename contained PR-#). 30-70 = suggestion only, manual review.
   auto_match_score INTEGER NOT NULL DEFAULT 0,
   reconciliation_status TEXT NOT NULL DEFAULT 'attributed',  -- 'attributed' | 'awaiting_review' | 'auto_matched' | 'manual_associated' | 'flagged_no_pr'
+  -- Which RIP spec version this job's XML was built against. Pinned per-row
+  -- so we can detect drift when an Inèdit version upgrade rolls out.
+  -- Today: '4.23.0'. When 5.0 ships, new jobs get built against the new spec
+  -- but in-flight 4.23.0 jobs continue under their original spec.
+  xml_spec_version TEXT,
   submitted_at TEXT,
   accepted_at TEXT,
   rip_started_at TEXT,

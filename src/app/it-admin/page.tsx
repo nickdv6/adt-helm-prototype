@@ -257,6 +257,11 @@ export default function ITAdminHome() {
           One agent per RIP machine. Each watches hot folders + reports back. */}
       <NeoStampaAgentsPanel />
 
+      {/* RIP Backend · Vendor Risk & Mitigation — Phase 1.9
+          What's pinned to Inèdit, what's abstracted, and what touch points
+          break (or don't) if Inèdit changes the spec or goes away. */}
+      <RipBackendRiskPanel />
+
       {/* User Provisioning + Audit Search */}
       <div className="grid grid-cols-3 gap-5">
         <Card>
@@ -539,5 +544,152 @@ Content-Type: application/json
         </div>
       </div>
     </Card>
+  );
+}
+
+// RIP Backend Vendor Risk panel — Phase 1.9. Lays out exactly what touches
+// Inèdit's spec and what is abstracted behind Helm-owned identifiers.
+function RipBackendRiskPanel() {
+  const db = getDb();
+  const targets = db.prepare(`
+    SELECT rip_target, COUNT(*) as folder_count
+    FROM hot_folders WHERE is_active = 1 GROUP BY rip_target
+  `).all() as any[];
+
+  return (
+    <Card>
+      <CardHeader
+        title="RIP Backend · Vendor Risk & Mitigation"
+        subtitle="What's pinned to Inèdit, what's abstracted behind Helm-owned identifiers, and what changes if NeoStampa changes."
+        action={<Tag color="yellow">Vendor dependency · documented</Tag>}
+      />
+
+      <div className="p-5 space-y-5">
+        {/* What's pinned */}
+        <div>
+          <div className="text-[11px] uppercase tracking-wider text-gray-500 font-bold mb-2">What's pinned to Inèdit today</div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
+                <tr>
+                  <th className="text-left px-3 py-2">Surface</th>
+                  <th className="text-left px-3 py-2">Pinned to</th>
+                  <th className="text-left px-3 py-2">Where</th>
+                  <th className="text-left px-3 py-2">Risk if Inèdit changes</th>
+                </tr>
+              </thead>
+              <tbody>
+                <Pin row="Job ticket XML structure" pin="neoRipEngine 4.23.0" where="src/components/neostampa-xml-preview.tsx" risk="Change one function. Other Helm code unaffected." />
+                <Pin row="Notification URL contract" pin="Inèdit spec §p.85 query-param format" where="/api/rip-events GET handler" risk="Add a new parser; old format keeps working." />
+                <Pin row="Hot folder file naming" pin="${externalJobName}.xml" where="/api/dispatch-to-rip" risk="None — our convention, not Inèdit's." />
+                <Pin row="ICC profile binding" pin="<ConvertProfile SourceID …/>" where="buildNeoStampaXml" risk="One-line spec migration." />
+                <Pin row="RapportInfo element" pin="<RapportInfo direction=V fraction_high=1 fraction_low=2/>" where="buildNeoStampaXml" risk="Inèdit-specific element. If renamed: one-line change." />
+                <Pin row="CGI invocation" pin="neoRipEngineCGI -p ... -out ..." where="Agent (out of Helm scope, runs on RIP machines)" risk="Agent code updates; Helm unaffected." />
+                <Pin row="XML spec version per job" pin="rip_jobs.xml_spec_version" where="rip_jobs row" risk="Lets in-flight jobs continue under their original spec when 5.0 ships." />
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* What's abstracted */}
+        <div>
+          <div className="text-[11px] uppercase tracking-wider text-gray-500 font-bold mb-2">What is NOT pinned (abstracted behind Helm-owned identifiers)</div>
+          <div className="grid grid-cols-2 gap-3">
+            <Mitigation
+              title="external_job_name is Helm's convention"
+              detail="CUSTOMER_PR-#_FO-#_DESIGN_COLORWAY_yyYD has zero Inèdit-specific tokens. If we swap RIP vendors tomorrow, the name still resolves to a Helm PR."
+            />
+            <Mitigation
+              title="rip_jobs lives in Helm's DB"
+              detail="The 12-state lifecycle, retry tracking, error history, and event timeline are owned by Helm. No NeoStampa table dependency."
+            />
+            <Mitigation
+              title="Physical QR = ground truth, not software status"
+              detail="Even if Inèdit's notification URLs break, the Traveler QR scanned at printer exit promotes the print to print_complete_qr. We never need NeoStampa to tell us 'this printed.'"
+            />
+            <Mitigation
+              title="Three inbound channels, not one"
+              detail="Inèdit notification URL + agent log-tail + agent folder-watch. If any one breaks, the others detect — and the agent reconciles."
+            />
+            <Mitigation
+              title="rip_target column on hot_folders"
+              detail="Each hot folder declares which RIP product it feeds. Today 'inedit_neostampa'. Tomorrow could be 'efi_fiery' / 'colorgate' / 'caldera' / 'inhouse_rip'. Switching is a config change."
+            />
+            <Mitigation
+              title="Reconciliation Queue catches anything"
+              detail="If a GUI-originated job appears that Helm doesn't recognize → Reconciliation Queue with EX-RIP-ORPHANED. Vendor switch doesn't drop work on the floor."
+            />
+          </div>
+        </div>
+
+        {/* Today's targets */}
+        <div>
+          <div className="text-[11px] uppercase tracking-wider text-gray-500 font-bold mb-2">Active RIP targets</div>
+          <div className="flex gap-3">
+            {targets.map((t) => (
+              <div key={t.rip_target} className="border border-gray-200 rounded p-3 flex-1">
+                <div className="font-mono text-xs font-semibold text-navy-700">{t.rip_target}</div>
+                <div className="text-2xl font-bold text-navy-900 mt-1">{t.folder_count}</div>
+                <div className="text-[10px] uppercase tracking-wider text-gray-500">hot folders</div>
+              </div>
+            ))}
+            <div className="border border-dashed border-gray-300 rounded p-3 flex-1 text-center">
+              <div className="text-xs text-gray-400 italic">Future adapters: efi_fiery · colorgate · caldera · inhouse_rip</div>
+            </div>
+          </div>
+        </div>
+
+        {/* If Inèdit changes — runbook */}
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 rounded p-4">
+          <div className="text-xs font-bold text-yellow-900 mb-2">If Inèdit changes the spec — runbook</div>
+          <ol className="space-y-1 text-xs text-yellow-900 list-decimal list-inside">
+            <li>Inèdit ships a new neoRipEngine version. Read the release notes, identify breaking changes.</li>
+            <li>Update <code className="font-mono">buildNeoStampaXml()</code> to emit the new shape. Bump the default <code className="font-mono">xml_spec_version</code> default.</li>
+            <li>In-flight jobs continue under their original spec via <code className="font-mono">rip_jobs.xml_spec_version</code>. New jobs use the new spec.</li>
+            <li>Update the agent (out-of-process) to parse any new notification URL shape. Existing GET/POST handler on <code className="font-mono">/api/rip-events</code> may already work since we control the URL query params.</li>
+            <li>Run the test suite (CI catches any drift in the XML output).</li>
+            <li>Stage rollout: one RIP machine first, watch for 24h, then fleet-wide.</li>
+          </ol>
+        </div>
+
+        {/* If Inèdit goes away */}
+        <div className="bg-red-50 border-l-4 border-red-400 rounded p-4">
+          <div className="text-xs font-bold text-red-900 mb-2">If Inèdit goes away entirely (acquisition, EOL, etc.) — fallback options</div>
+          <ul className="space-y-1 text-xs text-red-900 list-disc list-inside">
+            <li>The agent can switch to another RIP backend with no Helm code changes (just <code className="font-mono">hot_folders.rip_target</code> flip).</li>
+            <li>Alternatives evaluated: <strong>EFI Fiery</strong> (similar XML job-ticket model, well-documented), <strong>ColorGate Productionserver</strong> (textile-focused, similar capabilities), <strong>Caldera GrandRIP+</strong> (cross-industry, mature).</li>
+            <li>External job name + physical QR scan flow is vendor-independent. PR Detail, Reconciliation Queue, dispatcher API all work against any RIP that accepts XML job tickets and watches a hot folder.</li>
+            <li>The <code className="font-mono">.xjb</code> archive bundles we already keep (per spec p.83) preserve historical jobs even after Inèdit is gone.</li>
+          </ul>
+        </div>
+
+        <div className="text-[10px] text-gray-500 italic">
+          Reviewed at every major NeoStampa release. Vendor risk is acknowledged in the
+          ADT Helm blueprint and remains within tolerance because (a) Inèdit is the
+          textile-print industry standard, (b) the spec has been stable across several
+          major versions, and (c) our abstraction layer means a switch costs days, not weeks.
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function Pin({ row, pin, where, risk }: { row: string; pin: string; where: string; risk: string }) {
+  return (
+    <tr className="border-t border-gray-100">
+      <td className="px-3 py-2 text-xs font-semibold">{row}</td>
+      <td className="px-3 py-2 text-xs font-mono text-navy-700">{pin}</td>
+      <td className="px-3 py-2 text-[10px] font-mono text-gray-500">{where}</td>
+      <td className="px-3 py-2 text-[11px] text-gray-600 italic">{risk}</td>
+    </tr>
+  );
+}
+
+function Mitigation({ title, detail }: { title: string; detail: string }) {
+  return (
+    <div className="border border-gray-200 rounded p-3 bg-gray-50/30">
+      <div className="font-semibold text-navy-700 text-xs mb-1">{title}</div>
+      <div className="text-[11px] text-gray-600 leading-relaxed">{detail}</div>
+    </div>
   );
 }
