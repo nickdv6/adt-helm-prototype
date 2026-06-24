@@ -106,6 +106,29 @@ function CompanyInfoTab({ co }: { co: any }) {
       <div className="px-6 py-3 border-t border-gray-100 flex justify-end">
         <Button size="sm"><Pencil className="w-3.5 h-3.5 mr-1" />Edit</Button>
       </div>
+      <div className="border-t border-gray-200 px-6 py-5 bg-gray-50/50">
+        <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-3">
+          Customer Fulfillment Profile · free-text rules (Phase 1.14)
+        </div>
+        <div className="grid grid-cols-2 gap-x-12 gap-y-3 text-sm">
+          <div>
+            <div className="text-xs font-semibold text-gray-700 mb-1">Substitution Notes</div>
+            {co.substitution_notes
+              ? <div className="text-sm text-gray-800 bg-white border border-gray-200 rounded px-3 py-2 italic">{co.substitution_notes}</div>
+              : <div className="text-xs text-gray-400 italic">No substitution rules captured. Default: no substitutions without Megan approval.</div>}
+          </div>
+          <div>
+            <div className="text-xs font-semibold text-gray-700 mb-1">Fulfillment Notes</div>
+            {co.fulfillment_notes
+              ? <div className="text-sm text-gray-800 bg-white border border-gray-200 rounded px-3 py-2 italic">{co.fulfillment_notes}</div>
+              : <div className="text-xs text-gray-400 italic">No special fulfillment rules captured.</div>}
+          </div>
+        </div>
+        <div className="text-[11px] text-gray-500 italic mt-3">
+          Per Ali kickoff: substitution + special fulfillment rules are free-text on the Customer Fulfillment Profile.
+          No rules engine — too varied to encode. Full CFP entity expands in Wave 2.
+        </div>
+      </div>
     </Card>
   );
 }

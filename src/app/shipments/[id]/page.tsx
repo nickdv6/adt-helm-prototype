@@ -51,6 +51,8 @@ export default function ShipmentDetail({ params }: { params: { id: string } }) {
             </Tag>
             {order.is_rush ? <Tag color="red">Rush</Tag> : null}
             {order.is_blind_ship ? <Tag color="purple">Blind Ship</Tag> : null}
+            {order.requires_cad_services ? <Tag color="blue">CAD Services</Tag> : null}
+            {order.insure_package ? <Tag color="yellow">Insure Package</Tag> : null}
           </div>
           <div className="text-sm text-gray-600">
             {order.company_name} · Order <Link href={`/orders/${order.id}`} className="font-mono hover:underline text-navy-700">{order.order_number}</Link>

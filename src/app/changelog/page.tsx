@@ -12,6 +12,23 @@ type Entry = {
 
 const ENTRIES: Entry[] = [
   {
+    date: '2026-06-24',
+    version: '1.6',
+    title: 'Phase 1.14 — apply 4 confirmed Ali kickoff decisions',
+    bullets: [
+      'Decisions confirmed with Ali on 2026-06-24: deprecate "Additional Services" as a concept; HubSpot OUT OF SCOPE; Suntech as known future integration; substitution rules as free-text notes only.',
+      'Schema: orders.requires_cad_services + orders.insure_package boolean flags replace the DASH "Additional Services" bucket. RUSH + BLIND SHIP were already first-class (orders.is_rush, orders.is_blind_ship); CAD SERVICES + INSURE PACKAGE join them as first-class. The umbrella term is deprecated in Helm.',
+      'Schema: companies.substitution_notes + companies.fulfillment_notes (free-text) — minimum surface of the Customer Fulfillment Profile per Ali kickoff. No rules engine; full CFP entity (~14 fields) expands in Wave 2.',
+      'Schema: companies.hubspot_owner_email column retained as a vestigial DASH artifact but documented as not-written-to.',
+      'UI: CAD Services + Insure Package tags now render alongside Rush + Blind Ship on Order Detail, Shipping page, Shipping Home, Shipment Detail, and the shared shipping-order-row component (5 surfaces).',
+      'UI: Customer Detail gains a Customer Fulfillment Profile sub-section showing substitution_notes + fulfillment_notes with empty-state placeholders. Seeded on St Frank, Inside, Lemieux, Kravet so the surface has something to render.',
+      'IT/Admin: HubSpot tile now shows paused + "OUT OF SCOPE per Ali kickoff" description. New "Future Integrations · Known but not Phase 1" card surfaces Suntech (rolls, yardage per roll, weight, dimensions) and HubSpot (out of scope) side-by-side. HubSpot also removed from Sync Queue mock.',
+      'Glossary: added Customer Fulfillment Profile, Additional Services (deprecated), CAD Services, Insure Package, Suntech (future integration), HubSpot (out of scope).',
+      'Cleanup: HubSpot references removed from Tour page integration description, Settings prototype notes, Customers list subtitle, and README integrations bullet.',
+      'No business logic changes — these are all schema additions, seed values, label updates, and UI tag rendering. Existing OD-3 approval gate, lifecycle states, decision engines, and dispatchers are untouched.',
+    ],
+  },
+  {
     date: '2026-06-23',
     version: '1.5',
     title: 'Pre-handoff polish + overlap cleanup (Phase 1 + Phase 2 of the review report)',

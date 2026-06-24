@@ -27,8 +27,8 @@ export default function Shipping({ searchParams }: { searchParams: { tab?: strin
   }
   const readyToShip = db.prepare(`
     SELECT o.id, o.order_number, o.po_number, c.name as company_name, o.adt_promised_date,
-           o.is_rush, o.is_blind_ship, c.is_third_party_billed,
-           c.carrier_account_carrier, c.carrier_account_number
+           o.is_rush, o.is_blind_ship, o.requires_cad_services, o.insure_package,
+           c.is_third_party_billed, c.carrier_account_carrier, c.carrier_account_number
     FROM orders o JOIN companies c ON o.company_id = c.id
     WHERE ${readyWhere}
     ORDER BY o.is_rush DESC, date(o.adt_promised_date) ASC LIMIT 30
@@ -159,6 +159,8 @@ export default function Shipping({ searchParams }: { searchParams: { tab?: strin
                         promised_label: promised.label,
                         is_rush: o.is_rush,
                         is_blind_ship: o.is_blind_ship,
+                        requires_cad_services: o.requires_cad_services,
+                        insure_package: o.insure_package,
                         is_third_party_billed: o.is_third_party_billed,
                         carrier_account_carrier: o.carrier_account_carrier,
                         carrier_account_number: o.carrier_account_number,

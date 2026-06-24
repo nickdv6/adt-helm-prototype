@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS companies (
   carrier_account_carrier TEXT,
   primary_csr_user_id INTEGER,
   sales_rep_user_id INTEGER,
-  hubspot_owner_email TEXT,
+  hubspot_owner_email TEXT,                                   -- Vestigial DASH artifact. HubSpot integration is OUT OF SCOPE per Ali kickoff (Phase 1.14).
   -- Customer Automation Profile fields (Phase 1.11 minimum surface — full profile is Wave 2).
   -- These let the Strike-Off Decision Engine skip the strike entirely for pre-approved customer
   -- arrangements like St Frank's Click-and-Print. Without these flags, every new colorway
@@ -52,6 +52,11 @@ CREATE TABLE IF NOT EXISTS companies (
   skip_strike_for_new_colorways INTEGER NOT NULL DEFAULT 0,   -- e.g. St Frank: new colorway on existing design = direct to production
   skip_strike_for_reorders INTEGER NOT NULL DEFAULT 1,        -- Default: reorders skip strike if approved hash exists
   approval_freshness_days INTEGER NOT NULL DEFAULT 365,       -- Approved hashes expire after this many days → re-qualification required
+  -- Customer Fulfillment Profile free-text rules (Phase 1.14). Per Ali kickoff: customer-specific
+  -- substitution decisions are too varied to encode in a rules engine — capture as text and let CSR
+  -- judgment handle the edge cases. Will expand to a richer CFP entity in Wave 2.
+  substitution_notes TEXT,                                    -- Free-text: when can we substitute one fabric/colorway/SKU for another, who needs to confirm
+  fulfillment_notes TEXT,                                     -- Free-text: catch-all CFP notes (special pack rules, escalation contacts, customer quirks)
   is_legacy INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (primary_csr_user_id) REFERENCES users(id),
@@ -292,6 +297,11 @@ CREATE TABLE IF NOT EXISTS orders (
   subtotal REAL,
   is_blind_ship INTEGER NOT NULL DEFAULT 0,
   is_rush INTEGER NOT NULL DEFAULT 0,
+  -- Phase 1.14 — replaces the DASH "Additional Services" flag bucket. Per Ali kickoff:
+  -- RUSH + BLIND SHIP already had first-class fields above; CAD SERVICES + INSURE PACKAGE
+  -- now live as first-class boolean order flags. "Additional Services" as a concept is deprecated.
+  requires_cad_services INTEGER NOT NULL DEFAULT 0,           -- CAD digitization charge applies (design prep work billed back to customer)
+  insure_package INTEGER NOT NULL DEFAULT 0,                  -- Carrier package insurance requested on this shipment
   -- OD-3 + S23-S32.55 approval gate fields:
   approval_required INTEGER NOT NULL DEFAULT 0,
   trigger_reason TEXT, -- new_customer | new_artwork | rush | high_value | manual_flag | prior_issue (comma-separated if multiple)

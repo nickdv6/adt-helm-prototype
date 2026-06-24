@@ -715,6 +715,25 @@ db.prepare('SELECT id FROM printers').all().forEach((p: any, i: number) => {
 // Phase 1.11: flag a couple of pre-approved customers to skip strike on new colorways (e.g. St Frank Click-and-Print)
 db.prepare(`UPDATE companies SET skip_strike_for_new_colorways = 1 WHERE name IN ('St Frank', 'Inside')`).run();
 
+// Phase 1.14: seed Customer Fulfillment Profile free-text notes on a few companies so the
+// Customer Detail page has something to render.
+db.prepare(`UPDATE companies SET substitution_notes = ? WHERE name = 'St Frank'`).run(
+  'No fabric substitutions without Megan + Nadia approval. Colorway substitutions allowed only within the same parent design family.'
+);
+db.prepare(`UPDATE companies SET substitution_notes = ? WHERE name = 'Inside'`).run(
+  'No substitutions of any kind. Hold + email if material short.'
+);
+db.prepare(`UPDATE companies SET fulfillment_notes = ? WHERE name = 'St Frank'`).run(
+  'Friday LTL pallet customer. Hold + consolidate weekly. Use customer carrier account (FedEx ###-###). Branded supplies required: ST-PIL hangtags + ST-NAP inserts.'
+);
+db.prepare(`UPDATE companies SET fulfillment_notes = ? WHERE name IN ('Lemieux','Kravet')`).run(
+  'Friday LTL pallet customer (Kravet/Lemieux). Hold + consolidate. BOL generated from Helm; upload to carrier portal.'
+);
+
+// Phase 1.14: seed Additional-Services replacement flags on a sample of orders so the UI tags render.
+db.prepare(`UPDATE orders SET requires_cad_services = 1 WHERE id IN (SELECT id FROM orders WHERE source_system = 'manual' ORDER BY RANDOM() LIMIT 8)`).run();
+db.prepare(`UPDATE orders SET insure_package = 1 WHERE id IN (SELECT id FROM orders WHERE subtotal > 5000 ORDER BY RANDOM() LIMIT 10)`).run();
+
 console.log('Seeding strike-offs (~60 across PRs in strike-off-bearing roadmaps)...');
 const insStrike = db.prepare(`
   INSERT INTO strike_offs (strike_off_number, print_request_id, artwork_file_id, status,

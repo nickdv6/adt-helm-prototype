@@ -73,6 +73,30 @@ const TERMS: Term[] = [
     short: 'Per-customer flags that drive intake automation + decision engines.',
     detail: 'Currently 3 fields on companies: skip_strike_for_new_colorways, skip_strike_for_reorders, approval_freshness_days. Full profile is Wave 2 and will include intake_config_id, packaging_profile_id, etc.',
   },
+  {
+    term: 'Customer Fulfillment Profile',
+    category: 'Workflow',
+    short: 'Per-customer free-text + flag rules that govern how an order is packed and shipped.',
+    detail: 'Phase 1.14 minimum surface: substitution_notes + fulfillment_notes (free-text) on companies. Per Ali kickoff: substitution decisions are too varied to encode in a rules engine — capture as text. Full CFP entity (~14 fields per Ali spec) is Wave 2 and will subsume blind_ship, label modes A/B/C, branded supplies, etc.',
+  },
+  {
+    term: 'Additional Services (deprecated)',
+    category: 'Workflow',
+    short: 'DASH artifact: legacy flag bucket containing RUSH, BLIND SHIP, CAD SERVICES, INSURE PACKAGE.',
+    detail: 'Per Ali kickoff (Phase 1.14): the umbrella term is deprecated in Helm. Each former flag has a first-class home — orders.is_rush, orders.is_blind_ship, orders.requires_cad_services, orders.insure_package — all rendered as tags on Order Detail + Shipping surfaces.',
+  },
+  {
+    term: 'CAD Services',
+    category: 'Workflow',
+    short: 'Design digitization charge applied to an order. First-class boolean flag (orders.requires_cad_services) since Phase 1.14.',
+    detail: 'Formerly part of the DASH "Additional Services" bucket. Tagged on Order Detail, Shipping pages, Shipment Detail. When set, billing knows to add the CAD setup line during invoice generation.',
+  },
+  {
+    term: 'Insure Package',
+    category: 'Workflow',
+    short: 'Carrier package insurance requested on this order. First-class boolean flag (orders.insure_package) since Phase 1.14.',
+    detail: 'Formerly part of the DASH "Additional Services" bucket. Tagged on Order Detail, Shipping pages, Shipment Detail. Drives the EasyPost/UPS/FedEx insurance flag at label generation.',
+  },
 
   // ---------- Production ----------
   {
@@ -150,6 +174,18 @@ const TERMS: Term[] = [
     category: 'Integration',
     short: 'Legacy ADT SQL system. Source of design numbers (PLANT#) and historical orders.',
     detail: 'Helm reads from DASH today (PLANT# generation, intake). Long-term cutover plan: Helm becomes the source of truth, DASH retired.',
+  },
+  {
+    term: 'Suntech (future integration)',
+    category: 'Integration',
+    short: 'Inspection machine — eventually pulls roll inspection data into Helm automatically.',
+    detail: 'Known future integration per Ali kickoff (Phase 1.14). Data points captured per roll: number of rolls, yardage per roll, weight, dimensions. Not Phase 1 build. Suntech docs to be provided to Sight Source separately.',
+  },
+  {
+    term: 'HubSpot (out of scope)',
+    category: 'Integration',
+    short: 'Marked OUT OF SCOPE per Ali kickoff. Customer profile master record lives in Helm.',
+    detail: 'companies.hubspot_owner_email column is retained as a vestigial DASH artifact (no live sync). CSR-driven /customer-configs is the master surface; no second source of truth needed.',
   },
 ];
 

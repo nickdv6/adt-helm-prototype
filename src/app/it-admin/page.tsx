@@ -10,8 +10,8 @@ import {
 
 // S14 — IT / System Admin Home (Wave 1, desktop-first)
 // Per blueprint: integration health + user provisioning + audit search.
-// 9 integrations monitored: M365 SSO, HubSpot, PandaDoc, Shopify ×2, QuickBooks,
-// EasyPost (+UPS+FedEx), NAS, RIP, DASH.
+// 9 integrations monitored: M365 SSO, PandaDoc, Shopify ×2, QuickBooks,
+// EasyPost (+UPS+FedEx), NAS, RIP, DASH. (HubSpot marked OUT OF SCOPE per Ali kickoff, Phase 1.14.)
 // Layout follows the locked home template (S02-S15.1). Time window default today + 2 days.
 
 // =====================================================================
@@ -35,8 +35,8 @@ type Integration = {
 const INTEGRATIONS: Integration[] = [
   { key: 'm365',     name: 'Microsoft 365 SSO',           category: 'Identity',      status: 'healthy',  last_sync: '2 min ago',  last_sync_ms: 412,  records_synced_24h: 87,   failed_24h: 0,
     description: 'User auth + identity sync (Entra ID). Push direction: Helm reads users + group memberships from M365.' },
-  { key: 'hubspot',  name: 'HubSpot CRM',                 category: 'CRM',           status: 'healthy',  last_sync: '4 min ago',  last_sync_ms: 1834, records_synced_24h: 134,  failed_24h: 0,
-    description: 'Companies + Contacts one-way read (Phase 2 adds two-way). Drives customer + contact records.' },
+  { key: 'hubspot',  name: 'HubSpot CRM',                 category: 'CRM',           status: 'paused',   last_sync: 'OUT OF SCOPE', last_sync_ms: null, records_synced_24h: 0, failed_24h: 0,
+    description: 'OUT OF SCOPE per Ali kickoff (Phase 1.14). Customer profiles are owned by Helm via CSR-driven /customer-configs. companies.hubspot_owner_email column retained as a vestigial DASH artifact.' },
   { key: 'pandadoc', name: 'PandaDoc',                    category: 'Documents',     status: 'healthy',  last_sync: '14 min ago', last_sync_ms: 921,  records_synced_24h: 22,   failed_24h: 0,
     description: 'Customer agreements + NDA + onboarding documents. Signed-doc webhook updates customer state.' },
   { key: 'shop_a',   name: 'Shopify · Store A',           category: 'E-commerce',    status: 'healthy',  last_sync: '1 min ago',  last_sync_ms: 287,  records_synced_24h: 41,   failed_24h: 0,
@@ -63,7 +63,6 @@ type SyncQueueRow = {
 };
 const SYNC_QUEUE: SyncQueueRow[] = [
   { integration: 'NAS',       kind: 'Artwork file index',     queued: 12, oldest: '2 min ago' },
-  { integration: 'HubSpot',   kind: 'Company update pull',    queued: 4,  oldest: '6 min ago' },
   { integration: 'Shopify B', kind: 'Order webhook retry',    queued: 3,  oldest: '18 min ago' },
   { integration: 'EasyPost',  kind: 'Tracking poll',          queued: 1,  oldest: '1 min ago' },
 ];
@@ -129,7 +128,7 @@ export default function ITAdminHome() {
 
   return (
     <div className="max-w-7xl mx-auto space-y-5 pb-12">
-      <MockSurfaceBanner reason="Integration health tiles (QB, Shopify, HubSpot, etc.) are hardcoded mock — no live probes. NeoStampa Sync Agents + Hot Folders panels read live seed data; Vendor Risk panel is documentation. Production needs ping endpoints for each integration." />
+      <MockSurfaceBanner reason="Integration health tiles (QB, Shopify, etc.) are hardcoded mock — no live probes. NeoStampa Sync Agents + Hot Folders panels read live seed data; Vendor Risk panel is documentation. Production needs ping endpoints for each integration." />
       <header>
         <h1 className="text-2xl font-bold text-navy-900">IT / System Admin Home</h1>
         <p className="text-sm text-gray-500 mt-1">
@@ -192,6 +191,45 @@ export default function ITAdminHome() {
             ))}
           </tbody>
         </table>
+      </Card>
+
+      {/* Future integrations — known but not Phase 1 (per Ali kickoff decisions, Phase 1.14) */}
+      <Card>
+        <CardHeader
+          title="Future Integrations · Known but not Phase 1"
+          subtitle="Documented here so Sight Source + ADT keep visibility on them. Not built in Phase 1."
+        />
+        <div className="px-5 py-4 grid grid-cols-2 gap-4 text-sm">
+          <div className="border border-gray-200 rounded p-3 bg-amber-50/30">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="font-semibold text-navy-900">Suntech inspection machine</span>
+              <Tag color="yellow">Future</Tag>
+            </div>
+            <div className="text-xs text-gray-700 mb-2">
+              Direct pull from the Suntech inspection machine. Per Ali kickoff, treated as a known
+              future integration — not Phase 1.
+            </div>
+            <div className="text-[11px] text-gray-600">
+              <strong>Data points to capture:</strong> number of rolls · yardage per roll · weight · dimensions
+            </div>
+            <div className="text-[11px] text-gray-500 italic mt-1">Suntech docs to be provided to Sight Source separately.</div>
+          </div>
+          <div className="border border-gray-200 rounded p-3 bg-red-50/30">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="font-semibold text-navy-900">HubSpot CRM</span>
+              <Tag color="red">Out of scope</Tag>
+            </div>
+            <div className="text-xs text-gray-700 mb-2">
+              Marked out of scope by Ali during kickoff. Customer profile master record lives in Helm
+              via the CSR-driven <code className="font-mono text-xs">/customer-configs</code> surface. No second
+              source of truth needed.
+            </div>
+            <div className="text-[11px] text-gray-600">
+              <strong>Vestigial schema:</strong> <code className="font-mono">companies.hubspot_owner_email</code> column
+              retained as a DASH artifact for migration reference. Not written to.
+            </div>
+          </div>
+        </div>
       </Card>
 
       {/* Sync queue + Failed events side-by-side */}

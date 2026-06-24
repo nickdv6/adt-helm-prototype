@@ -38,6 +38,8 @@ type Order = {
   promised_label: string;
   is_rush: number;
   is_blind_ship: number;
+  requires_cad_services: number;
+  insure_package: number;
   is_third_party_billed: number;
   carrier_account_carrier: string | null;
   carrier_account_number: string | null;
@@ -107,6 +109,8 @@ export function ShippingOrderRow({ order, prs }: { order: Order; prs: PR[] }) {
         <td className="px-3 py-2.5">
           {order.is_rush ? <Tag color="red">Rush</Tag> : null}
           {order.is_blind_ship ? <Tag color="green">Blind</Tag> : null}
+          {order.requires_cad_services ? <Tag color="blue">CAD</Tag> : null}
+          {order.insure_package ? <Tag color="yellow">Insure</Tag> : null}
           <span className="text-[11px] text-gray-500 ml-1">{prs.length} PR{prs.length !== 1 ? 's' : ''} · {totalRolls} roll{totalRolls !== 1 ? 's' : ''}</span>
         </td>
         <td className="px-3 py-2.5 text-xs">

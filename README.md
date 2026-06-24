@@ -178,7 +178,7 @@ The SQLite schema in `src/db/schema.sql` mirrors the blueprint's data model and 
 
 - **No auth.** Every page renders as Sarah Castillo, CSR. Role switching is a follow-up task.
 - **No write paths.** Every screen is read-only. "+ New Order", "Edit", "Put on Hold" buttons don't persist yet.
-- **No real integrations.** HubSpot, QuickBooks, EasyPost, DASH — all mocked via seed data.
+- **No real integrations.** QuickBooks, EasyPost, DASH — all mocked via seed data. HubSpot is OUT OF SCOPE per Ali kickoff (Phase 1.14); Suntech is a known future integration.
 - **Some pages 404.** Sidebar links to `/inbox`, `/printer-queue`, `/cut-sew`, etc. — these come in follow-up sessions.
 - **No mobile-first work yet.** Customer approval page (S26a) is the only one that needs mobile; it's coming.
 

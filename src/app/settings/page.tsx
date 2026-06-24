@@ -75,7 +75,7 @@ export default function Settings() {
         <CardHeader title="Prototype Notes" />
         <div className="px-5 py-4 text-sm space-y-2 text-gray-700">
           <p>This prototype is built against the locked blueprint. Data is mock; no real customer/financial data is present.</p>
-          <p>Wave 1 production build (Sight Source) will replace this. Hot folder routing, HubSpot sync, QuickBooks sync, EasyPost integration, and full audit trail will be added there.</p>
+          <p>Wave 1 production build (Sight Source) will replace this. Hot folder routing, QuickBooks sync, EasyPost integration, and full audit trail will be added there. HubSpot integration is OUT OF SCOPE per Ali kickoff — see IT/Admin Future Integrations panel.</p>
           <p>Role switching uses localStorage and has no real auth. Production system will use SSO + the RBAC matrix from the Permissions Matrix deliverable.</p>
         </div>
       </Card>

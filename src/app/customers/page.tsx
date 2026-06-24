@@ -44,7 +44,7 @@ export default function CustomerList({ searchParams }: { searchParams: { q?: str
         <div>
           <h1 className="text-2xl font-bold text-navy-900">Customers</h1>
           <p className="text-sm text-gray-500 mt-1">
-            {rows.length} of {totalActive} active companies{hasFilters ? ' matching filters' : ''} · HubSpot syncs Companies + Contacts
+            {rows.length} of {totalActive} active companies{hasFilters ? ' matching filters' : ''} · Customer profile master record lives in Helm (HubSpot integration is out of scope per Ali kickoff)
           </p>
         </div>
         <Button>+ New Customer</Button>

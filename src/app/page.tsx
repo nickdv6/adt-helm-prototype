@@ -82,7 +82,7 @@ export default function Landing() {
             description="Today's printer load + PR list with late tracking. Pair with Strike-Off / CSR / Quality dashboards for the manager surface." />
           <TourCard icon={<Server className="w-5 h-5" />} href="/it-admin"
             title="IT / System Admin (S14)"
-            description="9 monitored integrations (QuickBooks, Shopify, HubSpot, PandaDoc, EasyPost, UPS/FedEx, NAS, RIP, DASH), sync queue, audit log." />
+            description="9 monitored integrations (QuickBooks, Shopify, PandaDoc, EasyPost, UPS/FedEx, NAS, RIP, DASH), sync queue, audit log. Future Integrations panel lists Suntech (planned) and HubSpot (out of scope)." />
         </div>
       </div>
 

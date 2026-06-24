@@ -47,6 +47,9 @@ export default function OrderDetail({ params }: { params: { id: string } }) {
             <h1 className="text-2xl font-bold text-navy-900 font-mono">{order.order_number}</h1>
             <StatusPill status={order.status} />
             {order.is_rush ? <Tag color="red">Rush</Tag> : null}
+            {order.is_blind_ship ? <Tag color="purple">Blind Ship</Tag> : null}
+            {order.requires_cad_services ? <Tag color="blue">CAD Services</Tag> : null}
+            {order.insure_package ? <Tag color="yellow">Insure Package</Tag> : null}
             {order.approval_required ? <Tag color="yellow">Megan Approval</Tag> : null}
           </div>
           <div className="text-sm text-gray-600">

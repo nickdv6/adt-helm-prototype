@@ -14,7 +14,8 @@ export default function ShippingHome() {
   // Packed rolls ready to ship, grouped by order
   const readyToShip = db.prepare(`
     SELECT o.id, o.order_number, c.name as company_name, o.adt_promised_date, o.is_blind_ship,
-           o.is_rush, COUNT(r.id) as roll_count, SUM(r.yards) as total_yards
+           o.is_rush, o.requires_cad_services, o.insure_package,
+           COUNT(r.id) as roll_count, SUM(r.yards) as total_yards
     FROM pr_rolls r
     JOIN print_requests pr ON r.pr_id = pr.id
     JOIN order_lines ol ON pr.order_line_id = ol.id
@@ -75,6 +76,8 @@ export default function ShippingHome() {
                   <td className="px-4 py-2.5 space-x-1">
                     {o.is_rush ? <Tag color="red">Rush</Tag> : null}
                     {o.is_blind_ship ? <Tag color="purple">Blind</Tag> : null}
+                    {o.requires_cad_services ? <Tag color="blue">CAD</Tag> : null}
+                    {o.insure_package ? <Tag color="yellow">Insure</Tag> : null}
                   </td>
                 </tr>
               ))}
