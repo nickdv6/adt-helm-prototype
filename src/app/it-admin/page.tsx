@@ -44,7 +44,7 @@ const INTEGRATIONS: Integration[] = [
   { key: 'shop_b',   name: 'Shopify · Store B',           category: 'E-commerce',    status: 'degraded', last_sync: '18 min ago', last_sync_ms: 4421, records_synced_24h: 19,   failed_24h: 3,
     description: 'fabricondemand.myshopify.com — webhook lag exceeding SLA (4.4s vs 1s target). Watching.' },
   { key: 'qb',       name: 'QuickBooks Desktop',          category: 'Accounting',    status: 'paused',   last_sync: '6h ago',     last_sync_ms: null, records_synced_24h: 0,    failed_24h: 0,
-    description: 'Wave 1: manual export pattern (no live sync). Phase 2 enables auto invoice push on Shipped.' },
+    description: 'Phase 1 (per Ali clarification #37, NICK-confirmed): daily order sync — Helm exports each day\'s orders as QB Sales Orders. Master SKU cross-reference (master_skus.qb_item_id) bridges 31-char QB limit. No reverse sync; A/R + invoicing live in QB.' },
   { key: 'easypost', name: 'EasyPost (UPS + FedEx)',      category: 'Shipping',      status: 'healthy',  last_sync: 'just now',   last_sync_ms: 612,  records_synced_24h: 67,   failed_24h: 1,
     description: 'Carrier rate + label + tracking. 1 failure today: USPS address validation timeout.' },
   { key: 'nas',      name: 'NAS · Artwork File Server',   category: 'Files',         status: 'healthy',  last_sync: '6 min ago',  last_sync_ms: 198,  records_synced_24h: 142,  failed_24h: 0,

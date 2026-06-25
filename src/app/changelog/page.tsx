@@ -13,6 +13,23 @@ type Entry = {
 const ENTRIES: Entry[] = [
   {
     date: '2026-06-24',
+    version: '1.7',
+    title: 'Phase 1.15 — apply NICK-confirmed Ali clarification answers (skip discussion items)',
+    bullets: [
+      'Applied only answers Nick has high confidence in. Items flagged for discussion (#8, #13, #17, #18, #19, #31, #43) intentionally NOT changed — pending Nick + Ali walkthrough.',
+      'Schema #1 — master_skus gains qb_item_id + qb_alias_required columns. QB Sales Order export uses qb_item_id when present, otherwise the SKU string. Bridges QuickBooks 31-char item-name limit. Seeded: any vpn > 31 chars auto-flagged with a generated ADT-{id} alias.',
+      'Schema #21 — inventory_items gains item_class enum (fabric | customer_material | branded_supply) + pretreat_state (NULL | free | allocated | consumed). 3-class model per Ali #21 NICK-confirmed. Seed: random inventory rows reclassified as customer_material / branded_supply so the UI has variety.',
+      'Schema #33 — companies gains fold_and_ship + fulfill_from_customer_inventory boolean flags (Customer Fulfillment Profile checkboxes per Ali #33). Seeded on St Frank + Inside + Lemieux.',
+      'UI #35 — Receiving inspection form now shows the full 5-outcome model: Accept / Accept with Notes / Hold for Review / Reject / Supervisor Review. Each option has a detail caption. Confirmed cost-bearing rules apply per fabric source.',
+      'UI #21 — /inventory-home table now surfaces item_class as a colored Tag column (Fabric blue, Customer Material purple, Branded Supply yellow) alongside item_type.',
+      'UI #33 — Customer Detail Fulfillment Profile section now shows a flag chip row (Fold & Ship, Fulfill from Customer Inventory, Blind Ship Default, 3rd-Party Billing) on top of the existing substitution + fulfillment notes.',
+      'IT/Admin #37 — QuickBooks integration tile description rewritten: "daily order sync — Helm exports each day\'s orders as QB Sales Orders" with master_skus.qb_item_id bridging the 31-char QB limit.',
+      'Glossary — added 9 new entries: Roadmap Builder (#4), Rush (#28 no-override-on-skip clarification), Slip-in (#27 Nick explanation), Notifications (#15 11-template list + credit-hold manual note), QuickBooks Sales Order Sync (#37), QB Item ID Alias (#1), LTL Pallet Shipment (#44 BOL PDF + standard packing list, no carrier API), Shipping Centralization Intent (#36 open decision documented).',
+      'No business logic / lifecycle / approval / decision-engine changes. Items deferred for Nick+Ali discussion: variable workflow steps (#8), 4-layer wrong-design defense (#13), FabricOutput / Parent QR design (#17), override audit + exception ownership (#18), cut/sew workflow (#19), PR + FR locking (#31), carrier APIs (#43 linked to #36).',
+    ],
+  },
+  {
+    date: '2026-06-24',
     version: '1.6',
     title: 'Phase 1.14 — apply 4 confirmed Ali kickoff decisions',
     bullets: [

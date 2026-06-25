@@ -50,6 +50,30 @@ const TERMS: Term[] = [
     detail: 'R1–R8 encode different combinations: print only, print+finish, print+cut/sew, customer-supplied material, click-and-print, etc. Set on order entry; drives which production steps are required.',
   },
   {
+    term: 'Roadmap Builder',
+    category: 'Workflow',
+    short: 'Admin tool to define new roadmaps (the routes orders follow) without engineering involvement.',
+    detail: 'Direction confirmed per Ali clarification #4 (NICK lean): build the configurable Roadmap Builder rather than hardcoding R1–R8. Lets ADT add/adapt roadmaps as customer relationships evolve without re-engaging Sight Source. Surface at /roadmaps.',
+  },
+  {
+    term: 'Rush',
+    category: 'Workflow',
+    short: 'Priority escalation flag on an order (orders.is_rush).',
+    detail: 'Per Ali clarification #28 (NICK-confirmed): never interrupts a mid-print job. CSR may request, Megan/Nick grant. Steps are NOT skipped on rush — finishing/QC/cut/sew all still happen. There is no override-on-skip pathway; rush only re-orders the queue.',
+  },
+  {
+    term: 'Slip-in',
+    category: 'Workflow',
+    short: 'Printing a lower-priority PR while its base fabric is already loaded — saves a fabric changeover.',
+    detail: 'Per Ali clarification #27 (NICK-confirmed): when a base fabric is already on the printer and that fabric has other queued PRs, Helm suggests printing those PRs in-line. Only wise IF (a) the fabric is not already allocated to another order, AND (b) the printer is fast enough that the slip-in won\'t affect day-capacity for higher-priority time-sensitive orders (Durst yes, Zimmer no). Megan-granted.',
+  },
+  {
+    term: 'Notifications',
+    category: 'Workflow',
+    short: '11 notification templates per Ali clarification #15 — some auto, some manual, mix of internal + production team.',
+    detail: 'Auto-release: new order intake, rush flagged, order matched a rule, internal proof requested, PR/RIP error, ready to ship, order shipped + tracking, promised date will slip, exception assigned to you, bundle issue raised. MANUAL release: credit hold (Helm does not pull live A/R data from QuickBooks — credit hold notifications are manually triggered by Accounting per #15 NICK note).',
+  },
+  {
     term: 'OD-3 / Approval Gate',
     category: 'Workflow',
     short: '6-trigger gate that requires Megan\'s approval before an order moves to production.',
@@ -186,6 +210,30 @@ const TERMS: Term[] = [
     category: 'Integration',
     short: 'Marked OUT OF SCOPE per Ali kickoff. Customer profile master record lives in Helm.',
     detail: 'companies.hubspot_owner_email column is retained as a vestigial DASH artifact (no live sync). CSR-driven /customer-configs is the master surface; no second source of truth needed.',
+  },
+  {
+    term: 'QuickBooks Sales Order Sync',
+    category: 'Integration',
+    short: 'Phase 1 daily push: each day\'s orders export to QuickBooks as Sales Orders.',
+    detail: 'Per Ali clarification #37 (NICK-confirmed): Helm exports daily orders to QB as Sales Orders. SKU-to-QB-item-ID translation via master_skus.qb_item_id (covers SKUs that exceed QB\'s 31-char limit). No reverse sync — A/R, invoicing, payment tracking all live in QB.',
+  },
+  {
+    term: 'QB Item ID Alias',
+    category: 'Integration',
+    short: 'master_skus.qb_item_id — short QB-side identifier that maps to an ADT SKU exceeding 31 characters.',
+    detail: 'Per Ali clarification #1 (NICK-confirmed). QuickBooks caps item names at 31 chars; ADT SKUs (especially PILLOW-{design}-{colorway}-{front}-{back}-{producttype}-{fabrictype}-{size}-{insertType}) routinely exceed this. master_skus.qb_alias_required flags SKUs that need an alias; master_skus.qb_item_id stores it. Sales Order export uses qb_item_id when present, otherwise the SKU string.',
+  },
+  {
+    term: 'LTL Pallet Shipment',
+    category: 'Integration',
+    short: 'Friday consolidated pallet shipments for Kravet, Lemieux, etc. Helm generates BOL PDF + standard packing list.',
+    detail: 'Per Ali clarification #44 (NICK-confirmed): Helm generates the BOL PDF and a standard packing list. Operator either uploads to whatever LTL portal the customer uses, or prints for the carrier pickup. No carrier API integration. "Ready to ship" for these customers means HOLD AND CONSOLIDATE, not ship immediately.',
+  },
+  {
+    term: 'Shipping Centralization Intent',
+    category: 'Integration',
+    short: 'Open decision per Ali #36: centralized shipping dashboard regardless of carrier-tool choice.',
+    detail: 'Nick\'s intent (#36): one shipping department dashboard with package details per order/PR, 3rd-party billing context, and rate comparison for ADT-paid shipments. Two paths: (1) keep FedEx Ship Manager + UPS WorldShip + Helm exposes label-data API; or (2) consolidate via EasyPost if the rewrite is more cost-effective. Decision pending.',
   },
 ];
 

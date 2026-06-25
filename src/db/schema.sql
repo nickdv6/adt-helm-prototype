@@ -57,6 +57,10 @@ CREATE TABLE IF NOT EXISTS companies (
   -- judgment handle the edge cases. Will expand to a richer CFP entity in Wave 2.
   substitution_notes TEXT,                                    -- Free-text: when can we substitute one fabric/colorway/SKU for another, who needs to confirm
   fulfillment_notes TEXT,                                     -- Free-text: catch-all CFP notes (special pack rules, escalation contacts, customer quirks)
+  -- Customer Fulfillment Profile flags (Phase 1.15 per Ali clarification #33, NICK-confirmed).
+  -- These are checkbox modifiers that drive packing/shipping behavior on every order for the customer.
+  fold_and_ship INTEGER NOT NULL DEFAULT 0,                   -- Pack folded (vs roll/flat). Drives Pack-Instruction Engine in Wave 2.
+  fulfill_from_customer_inventory INTEGER NOT NULL DEFAULT 0, -- Orders default to pulling from this customer's stored inventory (vs printing fresh)
   is_legacy INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (primary_csr_user_id) REFERENCES users(id),
@@ -361,6 +365,11 @@ CREATE TABLE IF NOT EXISTS master_skus (
   product_type TEXT NOT NULL,                     -- e.g. 'PIL_22x22_OUT', 'NAPKIN_20x20', 'TABLE_RUNNER_72'
   insert_key TEXT,                                -- e.g. '26x26-NW'. NULL when product_type has no insert.
   customer_id INTEGER,                            -- optional: some VPNs may be customer-specific
+  -- Phase 1.15: cross-reference to the QuickBooks item ID. Per Nick (Ali clarification #1):
+  -- ADT SKU strings can exceed QB's 31-char max, so we maintain a QB-side item code as the
+  -- canonical identifier for #37 sales-order export. Lookup direction: Helm SKU -> qb_item_id.
+  qb_item_id TEXT,                                -- QuickBooks item ID alias for SKUs exceeding 31 chars (or just to decouple)
+  qb_alias_required INTEGER NOT NULL DEFAULT 0,   -- 1 when the ADT SKU > 31 chars; signals that qb_item_id MUST be set before QB sync
   notes TEXT,
   last_updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   FOREIGN KEY (customer_id) REFERENCES companies(id)
@@ -676,6 +685,16 @@ CREATE TABLE IF NOT EXISTS fprs (
 CREATE TABLE IF NOT EXISTS inventory_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   item_type TEXT NOT NULL, -- fabric | insert | label | tag | mailer | packaging
+  -- Phase 1.15: 3-class inventory model per Ali clarification #21 (NICK-confirmed).
+  -- item_class is the high-level bucket; item_type stays as the granular sub-type.
+  -- fabric          = ADT-owned fabric (PFP / pretreat reactive / pretreat pigment etc.)
+  -- customer_material = mirrors the customer_materials table (per-PR + open-bank)
+  -- branded_supply  = customer-branded inserts / hangtags / mailers / labels (block ship if missing)
+  item_class TEXT NOT NULL DEFAULT 'fabric',      -- fabric | customer_material | branded_supply
+  -- Pretreat sub-state within item_class='fabric' (Reactive + Pigment lifecycle per Ali #21):
+  -- NULL = not a pretreat item; free = pretreated and uncommitted; allocated = matched to an order
+  -- but not yet printed; consumed = decremented when matched order is PRINTED.
+  pretreat_state TEXT,                            -- NULL | free | allocated | consumed
   fabric_id INTEGER,
   name TEXT NOT NULL,
   available_qty REAL NOT NULL DEFAULT 0,

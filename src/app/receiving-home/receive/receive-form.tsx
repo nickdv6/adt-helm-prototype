@@ -5,6 +5,8 @@ import { Card, CardHeader, Tag, Button } from '@/components/ui';
 
 type OwnerType = 'customer' | 'adt';
 type Absorbency = 'pass' | 'fail' | '';
+// Phase 1.15 — Receipt 5-outcome inspection per Ali clarification #35 (NICK-confirmed).
+type InspectionOutcome = '' | 'accept' | 'accept_with_notes' | 'hold_for_review' | 'reject' | 'supervisor_review';
 
 export function ReceiveForm({ customers }: { customers: { id: number; name: string }[] }) {
   // Owner + delivery
@@ -18,6 +20,8 @@ export function ReceiveForm({ customers }: { customers: { id: number; name: stri
   const [rollCount, setRollCount] = useState('');
   const [conditionNotes, setConditionNotes] = useState('');
   const [sampleTaken, setSampleTaken] = useState(false);
+  // Phase 1.15 — 5-outcome inspection per Ali #35 (NICK-confirmed)
+  const [inspectionOutcome, setInspectionOutcome] = useState<InspectionOutcome>('');
 
   // Sample testing (optional at submit — can be filled later by whichever dept runs the test)
   const [labL, setLabL] = useState('');
@@ -211,8 +215,40 @@ export function ReceiveForm({ customers }: { customers: { id: number; name: stri
 
         {/* Inspection */}
         <Card>
-          <CardHeader title="Inspection" />
+          <CardHeader title="Inspection" subtitle="5-outcome model per Ali clarification #35 — cost-bearing rules apply per fabric source" />
           <div className="p-5 space-y-4">
+            <Field label="Inspection outcome *">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                {([
+                  { value: 'accept',             label: 'Accept',              detail: 'Material clean. Allocate and move to inventory.' },
+                  { value: 'accept_with_notes',  label: 'Accept with Notes',   detail: 'Usable but note condition (logged for analytics).' },
+                  { value: 'hold_for_review',    label: 'Hold for Review',     detail: 'Park inbound; raise exception for Megan or supervisor.' },
+                  { value: 'reject',             label: 'Reject',              detail: 'Return to supplier/mill. Cost-bearer captured.' },
+                  { value: 'supervisor_review',  label: 'Supervisor Review',   detail: 'Escalation path — Nick/Megan decides disposition.' },
+                ] as const).map((o) => {
+                  const checked = inspectionOutcome === o.value;
+                  return (
+                    <label key={o.value}
+                      className={`flex items-start gap-2 border rounded px-3 py-2 cursor-pointer hover:bg-gray-50 ${
+                        checked ? 'border-navy-700 bg-navy-50/40' : 'border-gray-200'
+                      }`}>
+                      <input
+                        type="radio"
+                        name="inspection_outcome"
+                        value={o.value}
+                        checked={checked}
+                        onChange={() => setInspectionOutcome(o.value)}
+                        className="mt-0.5"
+                      />
+                      <div>
+                        <div className="font-semibold">{o.label}</div>
+                        <div className="text-xs text-gray-600">{o.detail}</div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </Field>
             <Field label="Condition notes (any damage, staining, packaging issues, missing tags)">
               <textarea
                 rows={3}

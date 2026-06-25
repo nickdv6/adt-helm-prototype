@@ -734,6 +734,22 @@ db.prepare(`UPDATE companies SET fulfillment_notes = ? WHERE name IN ('Lemieux',
 db.prepare(`UPDATE orders SET requires_cad_services = 1 WHERE id IN (SELECT id FROM orders WHERE source_system = 'manual' ORDER BY RANDOM() LIMIT 8)`).run();
 db.prepare(`UPDATE orders SET insure_package = 1 WHERE id IN (SELECT id FROM orders WHERE subtotal > 5000 ORDER BY RANDOM() LIMIT 10)`).run();
 
+// Phase 1.15: seed Customer Fulfillment Profile flags (Ali clarification #33, NICK-confirmed).
+db.prepare(`UPDATE companies SET fold_and_ship = 1 WHERE name IN ('St Frank', 'Inside', 'Lemieux')`).run();
+db.prepare(`UPDATE companies SET fulfill_from_customer_inventory = 1 WHERE name IN ('St Frank', 'Inside')`).run();
+
+// Phase 1.15: seed item_class on inventory_items so the 3-class model is visible in /inventory.
+// All existing rows are item_class='fabric' by default; flag a handful as customer_material + branded_supply.
+db.prepare(`UPDATE inventory_items SET item_class = 'customer_material' WHERE item_type IN ('insert', 'label', 'tag')
+            AND id IN (SELECT id FROM inventory_items WHERE item_type IN ('insert','label','tag') ORDER BY RANDOM() LIMIT 6)`).run();
+db.prepare(`UPDATE inventory_items SET item_class = 'branded_supply' WHERE item_type IN ('mailer', 'packaging', 'tag')
+            AND id IN (SELECT id FROM inventory_items WHERE item_type IN ('mailer','packaging','tag') ORDER BY RANDOM() LIMIT 6)`).run();
+
+// Phase 1.15: QB cross-reference (Ali clarification #1, NICK-confirmed).
+// For master SKUs longer than 31 chars, mark qb_alias_required and generate a short QB alias.
+db.prepare(`UPDATE master_skus SET qb_alias_required = 1 WHERE LENGTH(vpn) > 31`).run();
+db.prepare(`UPDATE master_skus SET qb_item_id = 'ADT-' || id WHERE qb_alias_required = 1`).run();
+
 console.log('Seeding strike-offs (~60 across PRs in strike-off-bearing roadmaps)...');
 const insStrike = db.prepare(`
   INSERT INTO strike_offs (strike_off_number, print_request_id, artwork_file_id, status,

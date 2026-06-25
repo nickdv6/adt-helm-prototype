@@ -11,7 +11,7 @@ export default function InventoryHome() {
   const me = db.prepare(`SELECT * FROM users WHERE primary_role='inventory' LIMIT 1`).get() as any;
 
   const lowStock = db.prepare(`
-    SELECT i.id, i.name, i.available_qty, i.reserved_qty, i.low_stock_threshold, i.status, i.item_type
+    SELECT i.id, i.name, i.available_qty, i.reserved_qty, i.low_stock_threshold, i.status, i.item_type, i.item_class
     FROM inventory_items i
     WHERE i.status IN ('LowStock','OutOfStock')
     ORDER BY i.available_qty ASC
@@ -40,6 +40,7 @@ export default function InventoryHome() {
             <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
               <tr>
                 <th className="text-left px-4 py-2.5">Item</th>
+                <th className="text-left px-4 py-2.5">Class</th>
                 <th className="text-left px-4 py-2.5">Type</th>
                 <th className="text-left px-4 py-2.5">Available</th>
                 <th className="text-left px-4 py-2.5">Reserved</th>
@@ -47,19 +48,24 @@ export default function InventoryHome() {
               </tr>
             </thead>
             <tbody>
-              {lowStock.map((i) => (
-                <tr key={i.id} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-2.5 text-sm">{i.name}</td>
-                  <td className="px-4 py-2.5"><Tag>{i.item_type}</Tag></td>
-                  <td className="px-4 py-2.5 font-mono text-xs">{i.available_qty}</td>
-                  <td className="px-4 py-2.5 font-mono text-xs">{i.reserved_qty}</td>
-                  <td className="px-4 py-2.5">
-                    <Tag color={i.status === 'OutOfStock' ? 'red' : 'yellow'}>{i.status}</Tag>
-                  </td>
-                </tr>
-              ))}
+              {lowStock.map((i) => {
+                const classColor = i.item_class === 'fabric' ? 'blue' : i.item_class === 'customer_material' ? 'purple' : i.item_class === 'branded_supply' ? 'yellow' : 'gray';
+                const classLabel = i.item_class === 'customer_material' ? 'Customer Material' : i.item_class === 'branded_supply' ? 'Branded Supply' : i.item_class === 'fabric' ? 'Fabric' : (i.item_class ?? 'Fabric');
+                return (
+                  <tr key={i.id} className="border-t border-gray-100 hover:bg-gray-50">
+                    <td className="px-4 py-2.5 text-sm">{i.name}</td>
+                    <td className="px-4 py-2.5"><Tag color={classColor}>{classLabel}</Tag></td>
+                    <td className="px-4 py-2.5"><Tag>{i.item_type}</Tag></td>
+                    <td className="px-4 py-2.5 font-mono text-xs">{i.available_qty}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs">{i.reserved_qty}</td>
+                    <td className="px-4 py-2.5">
+                      <Tag color={i.status === 'OutOfStock' ? 'red' : 'yellow'}>{i.status}</Tag>
+                    </td>
+                  </tr>
+                );
+              })}
               {lowStock.length === 0 && (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-gray-500 italic">Stock is healthy.</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-gray-500 italic">Stock is healthy.</td></tr>
               )}
             </tbody>
           </table>

@@ -108,7 +108,14 @@ function CompanyInfoTab({ co }: { co: any }) {
       </div>
       <div className="border-t border-gray-200 px-6 py-5 bg-gray-50/50">
         <div className="text-[10px] uppercase tracking-wider text-gray-500 font-bold mb-3">
-          Customer Fulfillment Profile · free-text rules (Phase 1.14)
+          Customer Fulfillment Profile · flags + free-text rules
+        </div>
+        <div className="flex flex-wrap items-center gap-2 mb-4 text-xs">
+          <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mr-1">Flags:</span>
+          <Tag color={co.fold_and_ship ? 'blue' : 'gray'}>{co.fold_and_ship ? 'Fold & Ship' : 'Fold & Ship: off'}</Tag>
+          <Tag color={co.fulfill_from_customer_inventory ? 'purple' : 'gray'}>{co.fulfill_from_customer_inventory ? 'Fulfill from Customer Inventory' : 'Fulfill from Customer Inventory: off'}</Tag>
+          <Tag color={co.is_blind_ship_default ? 'green' : 'gray'}>{co.is_blind_ship_default ? 'Blind Ship Default' : 'Blind Ship: off'}</Tag>
+          <Tag color={co.is_third_party_billed ? 'yellow' : 'gray'}>{co.is_third_party_billed ? `3rd-Party Billing (${co.carrier_account_carrier})` : '3rd-Party Billing: off'}</Tag>
         </div>
         <div className="grid grid-cols-2 gap-x-12 gap-y-3 text-sm">
           <div>
@@ -125,8 +132,8 @@ function CompanyInfoTab({ co }: { co: any }) {
           </div>
         </div>
         <div className="text-[11px] text-gray-500 italic mt-3">
-          Per Ali kickoff: substitution + special fulfillment rules are free-text on the Customer Fulfillment Profile.
-          No rules engine — too varied to encode. Full CFP entity expands in Wave 2.
+          Phase 1.15 minimum surface. Flags + free-text per Ali kickoff (#33). No rules engine — substitution decisions
+          are too varied to encode. Full CFP entity (~14 fields per Ali spec) expands in Wave 2.
         </div>
       </div>
     </Card>
